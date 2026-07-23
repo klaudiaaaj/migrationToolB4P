@@ -1,0 +1,56 @@
+{
+  "services": [
+    {
+      "name": "Orders",
+      "migrationRoot": "src/Orders/Orders.Database.Migrations/Migrations",
+      "namespace": "Orders.Database.Migrations",
+      "targetVersionFiles": [
+        {
+          "path": "src/Orders/Orders.Database.Migrations/appsettings.json",
+          "propertyName": "target_version"
+        }
+      ],
+      "versionInfo": {
+        "schema": "dbo",
+        "table": "VersionInfo",
+        "versionColumn": "Version",
+        "descriptionColumn": "Description",
+        "appliedOnColumn": "AppliedOn",
+        "provider": "SqlServer",
+        "failWhenDatabaseAhead": true,
+        "treatMissingVersionInfoAsEmpty": true,
+        "requireAppliedVersionsInAssembly": false
+      }
+    },
+    {
+      "name": "Billing",
+      "migrationRoot": "src/Billing/Billing.Database.Migrations/Migrations",
+      "namespace": "Billing.Database.Migrations",
+      "targetVersionFiles": [
+        {
+          "path": "src/Billing/Billing.Database.Migrations/appsettings.json",
+          "propertyName": "target_version"
+        }
+      ],
+      "versionInfo": {
+        "schema": "dbo",
+        "provider": "SqlServer"
+      }
+    },
+    {
+      "name": "Identity",
+      "migrationRoot": "src/Identity/Identity.Database.Migrations/Migrations",
+      "namespace": "Identity.Database.Migrations",
+      "targetVersionFiles": [
+        {
+          "path": "src/Identity/Identity.Database.Migrations/appsettings.json",
+          "propertyName": "target_version"
+        }
+      ],
+      "versionInfo": {
+        "schema": "dbo",
+        "provider": "SqlServer"
+      }
+    }
+  ]
+}

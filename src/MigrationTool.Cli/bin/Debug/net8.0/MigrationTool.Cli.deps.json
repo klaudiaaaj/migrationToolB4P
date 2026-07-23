@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "MigrationTool.Cli/1.0.0": {
+        "dependencies": {
+          "MigrationTool.Core": "1.0.0"
+        },
+        "runtime": {
+          "MigrationTool.Cli.dll": {}
+        }
+      },
+      "MigrationTool.Core/1.0.0": {
+        "runtime": {
+          "MigrationTool.Core.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "MigrationTool.Cli/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "MigrationTool.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

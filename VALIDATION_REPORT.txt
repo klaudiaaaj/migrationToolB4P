@@ -1,0 +1,12 @@
+Validation performed in the generation environment:
+- JSON syntax: passed
+- XML/MSBuild syntax: passed
+- GitLab YAML syntax: passed
+- Bash syntax: passed
+- C# lexical/string/bracket sanity check: passed
+
+The generation environment did not contain a .NET SDK, so dotnet build and the
+included smoke test could not be executed here. Run these commands after copying:
+
+  dotnet build MigrationToolStarter.sln
+  dotnet run --project tests/MigrationTool.SmokeTests

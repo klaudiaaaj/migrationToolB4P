@@ -1,0 +1,27 @@
+<Project>
+  <!--
+    Opcjonalna walidacja strukturalna podczas build/publish projektu migracyjnego.
+
+    W projekcie migracyjnym ustaw:
+      <MigrationServiceName>Orders</MigrationServiceName>
+      <MigrationValidationEnabled>true</MigrationValidationEnabled>
+
+    Zaimportuj plik tylko w projektach migracyjnych. Nie importuj go w projekcie
+    MigrationTool.Cli, aby uniknąć rekursywnego uruchamiania.
+  -->
+  <Target
+    Name="ValidateMigrationFiles"
+    BeforeTargets="BeforeBuild"
+    Condition="'$(MigrationValidationEnabled)' == 'true' and '$(MigrationServiceName)' != '' and '$(DesignTimeBuild)' != 'true'">
+
+    <PropertyGroup>
+      <MigrationRepositoryRoot Condition="'$(MigrationRepositoryRoot)' == ''">$(MSBuildProjectDirectory)/../../..</MigrationRepositoryRoot>
+      <MigrationToolProject Condition="'$(MigrationToolProject)' == ''">$(MigrationRepositoryRoot)/tools/MigrationTool/src/MigrationTool.Cli/MigrationTool.Cli.csproj</MigrationToolProject>
+      <MigrationToolConfig Condition="'$(MigrationToolConfig)' == ''">$(MigrationRepositoryRoot)/migrationtool.json</MigrationToolConfig>
+    </PropertyGroup>
+
+    <Exec
+      WorkingDirectory="$(MigrationRepositoryRoot)"
+      Command="dotnet run --project &quot;$(MigrationToolProject)&quot; -- validate --repo &quot;$(MigrationRepositoryRoot)&quot; --config &quot;$(MigrationToolConfig)&quot; --service &quot;$(MigrationServiceName)&quot;" />
+  </Target>
+</Project>

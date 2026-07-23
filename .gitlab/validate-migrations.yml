@@ -1,0 +1,26 @@
+validate:migrations:
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  stage: validate
+
+  variables:
+    GIT_DEPTH: "0"
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "src/**/Migrations/**/*"
+        - "src/**/appsettings*.json"
+        - "migrationtool.json"
+        - "tools/MigrationTool/**/*"
+
+  before_script:
+    - git fetch origin "+${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+
+  script:
+    - >
+      dotnet run
+      --project tools/MigrationTool/src/MigrationTool.Cli/MigrationTool.Cli.csproj
+      --
+      check
+      --config migrationtool.json
+      --target-ref "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"

@@ -1,0 +1,12 @@
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/bin/Debug/net8.0/MigrationTool.Core.deps.json
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/bin/Debug/net8.0/MigrationTool.Core.dll
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/bin/Debug/net8.0/MigrationTool.Core.pdb
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.GeneratedMSBuildEditorConfig.editorconfig
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.AssemblyInfoInputs.cache
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.AssemblyInfo.cs
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.csproj.CoreCompileInputs.cache
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.sourcelink.json
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.dll
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/refint/MigrationTool.Core.dll
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.pdb
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/ref/MigrationTool.Core.dll
