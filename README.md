@@ -265,3 +265,4 @@ Test tworzy tymczasowe repozytorium Git i odtwarza scenariusz:
 5. automatyczne `sync`,
 6. poprawna walidacja po przenumerowaniu.
 # migrationToolB4P
+# migrationToolB4P
