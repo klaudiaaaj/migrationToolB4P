@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace MigrationTool.Core.Configuration;
 
@@ -36,8 +35,6 @@ public sealed class MigrationToolConfiguration
             AllowTrailingCommas = true
         };
 
-        options.Converters.Add(new JsonStringEnumConverter());
-
         var configuration = JsonSerializer.Deserialize<MigrationToolConfiguration>(json, options)
             ?? throw new InvalidOperationException("Plik konfiguracji jest pusty lub niepoprawny.");
 
@@ -61,7 +58,6 @@ public sealed class MigrationServiceConfiguration
     public required string MigrationRoot { get; init; }
     public required string Namespace { get; init; }
     public List<TargetVersionFileConfiguration> TargetVersionFiles { get; init; } = [];
-    public VersionInfoConfiguration VersionInfo { get; init; } = new();
 
     public void Validate()
     {
@@ -92,25 +88,4 @@ public sealed class TargetVersionFileConfiguration
 {
     public required string Path { get; init; }
     public string PropertyName { get; init; } = "target_version";
-}
-
-public sealed class VersionInfoConfiguration
-{
-    public string? Schema { get; init; }
-    public string Table { get; init; } = "VersionInfo";
-    public string VersionColumn { get; init; } = "Version";
-    public string DescriptionColumn { get; init; } = "Description";
-    public string AppliedOnColumn { get; init; } = "AppliedOn";
-    public DatabaseProvider Provider { get; init; } = DatabaseProvider.SqlServer;
-    public bool FailWhenDatabaseAhead { get; init; } = true;
-    public bool TreatMissingVersionInfoAsEmpty { get; init; } = true;
-    public bool RequireAppliedVersionsInAssembly { get; init; }
-}
-
-public enum DatabaseProvider
-{
-    SqlServer,
-    PostgreSql,
-    MySql,
-    Sqlite
 }

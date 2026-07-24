@@ -4,7 +4,6 @@ using FluentMigrator.Runner.VersionTableInfo;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using MigrationTool.Core.Configuration;
-using MigrationTool.Core.Domain;
 
 namespace MigrationTool.Core.Runtime;
 
@@ -19,27 +18,18 @@ public sealed record MigrationRunResult(
     MigrationDirection Direction,
     long CurrentVersion,
     long TargetVersion,
-    bool IsDryRun,
-    string Plan);
+    bool IsDryRun);
+
+public sealed class MigrationSafetyException(string message) : Exception(message);
 
 public sealed class MigrationToolRunner
 {
     private readonly Assembly _migrationsAssembly;
-    private readonly VersionInfoConfiguration _versionInfoDefaults;
 
-    public MigrationToolRunner(
-        Assembly migrationsAssembly,
-        VersionInfoConfiguration? versionInfoDefaults = null)
+    public MigrationToolRunner(Assembly migrationsAssembly)
     {
         _migrationsAssembly = migrationsAssembly ??
             throw new ArgumentNullException(nameof(migrationsAssembly));
-        _versionInfoDefaults = versionInfoDefaults ?? new VersionInfoConfiguration();
-
-        if (_versionInfoDefaults.Provider != DatabaseProvider.SqlServer)
-        {
-            throw new NotSupportedException(
-                "MigrationToolRunner jest skonfigurowany bezpośrednio dla SQL Server.");
-        }
     }
 
     public async Task<MigrationRunResult> Run(
@@ -56,14 +46,19 @@ public sealed class MigrationToolRunner
         await connection.OpenAsync(runToken).ConfigureAwait(false);
         await AcquireDatabaseLock(connection, options, runToken).ConfigureAwait(false);
 
-        var versionInfo = BuildVersionInfoConfiguration(options);
-        using var serviceProvider = BuildFluentMigratorServices(options, versionInfo);
+        using var serviceProvider = BuildFluentMigratorServices(options);
         using var scope = serviceProvider.CreateScope();
         var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
         var versionLoader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
+        var availableVersions = runner.MigrationLoader
+            .LoadMigrations()
+            .Keys
+            .ToHashSet();
         var applied = ReadAppliedMigrations(versionLoader);
-        var currentVersion = applied.Select(x => x.Version).DefaultIfEmpty(0).Max();
+        var currentVersion = applied.DefaultIfEmpty(0).Max();
         var direction = ResolveDirection(currentVersion, options.Version);
+
+        ValidateState(availableVersions, applied, currentVersion, options.Version, direction);
 
         if (direction == MigrationDirection.None)
         {
@@ -71,31 +66,36 @@ public sealed class MigrationToolRunner
                 MigrationDirection.None,
                 currentVersion,
                 options.Version,
-                options.IsDryRun,
-                $"Baza jest już w wersji {currentVersion}. Brak migracji do wykonania.");
+                options.IsDryRun);
         }
 
-        return direction == MigrationDirection.Up
-            ? RunUp(
-                runner,
-                versionLoader,
-                options,
-                versionInfo,
-                currentVersion,
-                runToken)
-            : RunDown(
-                runner,
-                versionLoader,
-                options,
-                currentVersion,
-                runToken);
+        runToken.ThrowIfCancellationRequested();
+
+        if (direction == MigrationDirection.Up)
+        {
+            runner.MigrateUp(options.Version);
+        }
+        else
+        {
+            runner.MigrateDown(options.Version);
+        }
+
+        if (!options.IsDryRun)
+        {
+            var appliedAfter = ReadAppliedMigrations(versionLoader);
+            VerifyFinalState(availableVersions, appliedAfter, options.Version);
+        }
+
+        return new MigrationRunResult(
+            direction,
+            currentVersion,
+            options.Version,
+            options.IsDryRun);
     }
 
-    private ServiceProvider BuildFluentMigratorServices(
-        MigrationOptions options,
-        VersionInfoConfiguration versionInfo)
+    private ServiceProvider BuildFluentMigratorServices(MigrationOptions options)
     {
-        var versionTable = new MigrationVersionTable(versionInfo);
+        var versionTable = new MigrationVersionTable(options.SchemaName);
 
         return new ServiceCollection()
             .AddSingleton(options)
@@ -123,103 +123,76 @@ public sealed class MigrationToolRunner
             _ => MigrationDirection.None
         };
 
-    private MigrationRunResult RunUp(
-        IMigrationRunner runner,
-        IVersionLoader versionLoader,
-        MigrationOptions options,
-        VersionInfoConfiguration versionInfo,
+    private static void ValidateState(
+        IReadOnlySet<long> available,
+        IReadOnlySet<long> applied,
         long currentVersion,
-        CancellationToken cancellationToken)
+        long targetVersion,
+        MigrationDirection direction)
     {
-        var applied = ReadAppliedMigrations(versionLoader);
-        var plan = MigrationRuntimeGuard.ValidateBeforeUp(
-            _migrationsAssembly,
-            applied,
-            options.Version,
-            versionInfo);
-        var formattedPlan = MigrationRuntimeGuard.FormatPlan(plan);
-
-        cancellationToken.ThrowIfCancellationRequested();
-        runner.MigrateUp(options.Version);
-
-        if (!options.IsDryRun)
+        if (targetVersion != 0 && !available.Contains(targetVersion))
         {
-            var appliedAfter = ReadAppliedMigrations(versionLoader);
-            MigrationRuntimeGuard.VerifyAfterUp(
-                _migrationsAssembly,
-                appliedAfter,
-                options.Version,
-                versionInfo);
+            throw new MigrationSafetyException(
+                $"Wersja docelowa {targetVersion} nie istnieje w assembly migracyjnym.");
         }
 
-        return new MigrationRunResult(
-            MigrationDirection.Up,
-            currentVersion,
-            options.Version,
-            options.IsDryRun,
-            formattedPlan);
-    }
-
-    private MigrationRunResult RunDown(
-        IMigrationRunner runner,
-        IVersionLoader versionLoader,
-        MigrationOptions options,
-        long currentVersion,
-        CancellationToken cancellationToken)
-    {
-        var applied = ReadAppliedMigrations(versionLoader);
-        var plan = MigrationRuntimeGuard.ValidateBeforeDown(
-            _migrationsAssembly,
-            applied,
-            options.Version);
-        var formattedPlan = MigrationRuntimeGuard.FormatDownPlan(plan);
-
-        cancellationToken.ThrowIfCancellationRequested();
-        runner.MigrateDown(options.Version);
-
-        if (!options.IsDryRun)
+        var missingFromAssembly = applied
+            .Where(version => !available.Contains(version))
+            .OrderBy(version => version)
+            .ToArray();
+        if (missingFromAssembly.Length > 0)
         {
-            var appliedAfter = ReadAppliedMigrations(versionLoader);
-            MigrationRuntimeGuard.VerifyAfterDown(
-                _migrationsAssembly,
-                appliedAfter,
-                options.Version);
+            throw new MigrationSafetyException(
+                "VersionInfo zawiera migracje, których nie ma w assembly: " +
+                string.Join(", ", missingFromAssembly));
         }
 
-        return new MigrationRunResult(
-            MigrationDirection.Down,
-            currentVersion,
-            options.Version,
-            options.IsDryRun,
-            formattedPlan);
+        var skipped = available
+            .Where(version => version < currentVersion && !applied.Contains(version))
+            .OrderBy(version => version)
+            .ToArray();
+        if (skipped.Length > 0)
+        {
+            throw new MigrationSafetyException(
+                "Wykryto pominięte migracje starsze od aktualnej wersji bazy: " +
+                string.Join(", ", skipped));
+        }
+
+        if (direction == MigrationDirection.Down &&
+            targetVersion != 0 &&
+            !applied.Contains(targetVersion))
+        {
+            throw new MigrationSafetyException(
+                $"Nie można wykonać down. Wersja {targetVersion} nie istnieje w VersionInfo.");
+        }
     }
 
-    private static IReadOnlyList<AppliedMigration> ReadAppliedMigrations(
-        IVersionLoader versionLoader)
+    private static void VerifyFinalState(
+        IReadOnlySet<long> available,
+        IReadOnlySet<long> applied,
+        long targetVersion)
+    {
+        var expected = available
+            .Where(version => version <= targetVersion)
+            .ToHashSet();
+
+        if (!applied.SetEquals(expected))
+        {
+            throw new MigrationSafetyException(
+                $"Migracja nie osiągnęła wersji {targetVersion}. " +
+                $"Oczekiwano [{string.Join(", ", expected.Order())}], " +
+                $"VersionInfo zawiera [{string.Join(", ", applied.Order())}].");
+        }
+    }
+
+    private static IReadOnlySet<long> ReadAppliedMigrations(IVersionLoader versionLoader)
     {
         versionLoader.LoadVersionInfo();
 
         return versionLoader.VersionInfo
             .AppliedMigrations()
-            .Distinct()
-            .OrderBy(version => version)
-            .Select(version => new AppliedMigration(version))
-            .ToArray();
+            .ToHashSet();
     }
-
-    private VersionInfoConfiguration BuildVersionInfoConfiguration(MigrationOptions options)
-        => new()
-        {
-            Schema = options.SchemaName,
-            Table = _versionInfoDefaults.Table,
-            VersionColumn = _versionInfoDefaults.VersionColumn,
-            DescriptionColumn = _versionInfoDefaults.DescriptionColumn,
-            AppliedOnColumn = _versionInfoDefaults.AppliedOnColumn,
-            Provider = DatabaseProvider.SqlServer,
-            FailWhenDatabaseAhead = _versionInfoDefaults.FailWhenDatabaseAhead,
-            TreatMissingVersionInfoAsEmpty = _versionInfoDefaults.TreatMissingVersionInfoAsEmpty,
-            RequireAppliedVersionsInAssembly = _versionInfoDefaults.RequireAppliedVersionsInAssembly
-        };
 
     private static async Task AcquireDatabaseLock(
         SqlConnection connection,
@@ -260,20 +233,20 @@ public sealed class MigrationToolRunner
 
     private sealed class MigrationVersionTable : IVersionTableMetaData
     {
-        private readonly VersionInfoConfiguration _configuration;
+        private readonly string _schemaName;
 
-        public MigrationVersionTable(VersionInfoConfiguration configuration)
+        public MigrationVersionTable(string schemaName)
         {
-            _configuration = configuration;
+            _schemaName = schemaName;
         }
 
         public bool OwnsSchema => true;
-        public string SchemaName => _configuration.Schema ?? string.Empty;
-        public string TableName => _configuration.Table;
-        public string ColumnName => _configuration.VersionColumn;
-        public string DescriptionColumnName => _configuration.DescriptionColumn;
+        public string SchemaName => _schemaName;
+        public string TableName => "VersionInfo";
+        public string ColumnName => "Version";
+        public string DescriptionColumnName => "Description";
         public string UniqueIndexName => "UC_Version";
-        public string AppliedOnColumnName => _configuration.AppliedOnColumn;
+        public string AppliedOnColumnName => "AppliedOn";
         public bool CreateWithPrimaryKey => false;
     }
 }

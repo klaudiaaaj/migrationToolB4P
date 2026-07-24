@@ -50,28 +50,18 @@ Przykład:
           "path": "src/Orders/Orders.Database.Migrations/appsettings.json",
           "propertyName": "target_version"
         }
-      ],
-      "versionInfo": {
-        "schema": "dbo",
-        "table": "VersionInfo",
-        "versionColumn": "Version",
-        "descriptionColumn": "Description",
-        "appliedOnColumn": "AppliedOn",
-        "provider": "SqlServer",
-        "failWhenDatabaseAhead": true,
-        "treatMissingVersionInfoAsEmpty": true,
-        "requireAppliedVersionsInAssembly": false
-      }
+      ]
     }
   ]
 }
 ```
 
 Publiczne runtime API `MigrationToolRunner` wykonuje migracje bezpośrednio dla
-`SqlServer`. Historię wykonanych migracji odczytuje przez gotowe API
-FluentMigratora: `IVersionLoader.LoadVersionInfo()` oraz
-`VersionInfo.AppliedMigrations()`. Biblioteka nie wykonuje własnego zapytania
-`SELECT` do tabeli `VersionInfo`.
+`SqlServer`. Migracje z assembly pobiera przez
+`MigrationLoader.LoadMigrations()`, a historię wykonanych migracji przez
+`IVersionLoader.LoadVersionInfo()` i `VersionInfo.AppliedMigrations()`.
+Biblioteka nie skanuje assembly własną refleksją i nie wykonuje własnego
+zapytania `SELECT` do tabeli `VersionInfo`.
 
 `target_version` może być liczbą albo tekstem zawierającym cyfry. Wskazana właściwość powinna występować w pliku dokładnie raz.
 
@@ -167,7 +157,7 @@ Warto dodatkowo włączyć w GitLabie:
 Aplikacja przekazuje tylko obiekt `MigrationOptions`:
 
 ```csharp
-var result = await migrationTool.Run(new MigrationOptions
+await migrationTool.Run(new MigrationOptions
 {
     ConnectionString = connectionString,
     SchemaName = "orders",
@@ -176,8 +166,6 @@ var result = await migrationTool.Run(new MigrationOptions
     Timeout = 120,
     IsDryRun = false
 });
-
-logger.LogInformation("{MigrationPlan}", result.Plan);
 ```
 
 Pola:
@@ -197,10 +185,17 @@ Version < aktualna wersja  → MigrateDown(Version)
 Version = aktualna wersja  → brak operacji
 ```
 
-Przed `up` sprawdzana jest pełna historia, więc luka typu `100` pominięte, ale `200`
-wdrożone nadal blokuje wykonanie. Przed `down` cel musi znajdować się w `VersionInfo`
-albo mieć wartość `0`. Po zwykłym wykonaniu `Run` ponownie sprawdza stan tabeli.
-Po dry-runie weryfikacja końcowa jest pomijana, ponieważ baza celowo się nie zmienia.
+Przed wykonaniem sprawdzane jest tylko to, co wpływa na bezpieczeństwo:
+
+- wersja docelowa istnieje w assembly albo wynosi `0`,
+- każda zastosowana migracja z `VersionInfo` istnieje w assembly,
+- poniżej aktualnej wersji bazy nie ma pominiętych migracji,
+- dla `down` wersja docelowa istnieje w `VersionInfo` albo wynosi `0`.
+
+Jeżeli którykolwiek warunek nie jest spełniony, `Run` zgłasza
+`MigrationSafetyException` przed wykonaniem SQL. Po zwykłym wykonaniu sprawdza,
+czy `VersionInfo` dokładnie odpowiada wybranej wersji. Po dry-runie kontrola
+końcowa jest pomijana, ponieważ baza celowo się nie zmienia.
 
 `MigrationToolRunner` korzysta bezpośrednio z FluentMigratora dla SQL Server.
 Nie trzeba implementować `IMigrationExecutor`, fabryki runnera ani adaptera.
@@ -222,13 +217,13 @@ Runner tworzy się, wskazując assembly zawierające migracje:
 
 ```csharp
 var migrationTool = new MigrationToolRunner(typeof(Program).Assembly);
-var result = await migrationTool.Run(options);
+await migrationTool.Run(options);
 ```
 
 Minimalna fasada znajduje się w `examples/ExistingMigratorIntegration.cs`.
 
 Pomocnicze CLI służy już tylko do pracy ze źródłami (`new`, `validate`, `check`,
-`sync`). Komenda `plan` została usunięta — plan jest zawsze zwracany przez `Run`.
+`sync`). Komenda `plan` oraz modele planowania runtime zostały usunięte.
 
 ## 6. Opcjonalna walidacja MSBuild
 
