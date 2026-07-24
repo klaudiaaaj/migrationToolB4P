@@ -64,6 +64,75 @@ public static class MigrationRuntimeGuard
         }
     }
 
+    public static async Task<MigrationDownPlan> ValidateBeforeDownAsync(
+        DbConnection connection,
+        Assembly migrationsAssembly,
+        long targetVersion,
+        VersionInfoConfiguration versionInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var available = AssemblyMigrationDiscovery.Discover(migrationsAssembly);
+        var applied = await VersionInfoReader
+            .ReadAsync(connection, versionInfo, cancellationToken)
+            .ConfigureAwait(false);
+
+        var plan = MigrationDownPlanBuilder.Build(available, applied, targetVersion);
+        if (!plan.IsSafe)
+        {
+            throw new MigrationRollbackException(BuildDownErrorMessage(plan), plan);
+        }
+
+        return plan;
+    }
+
+    public static async Task VerifyAfterDownAsync(
+        DbConnection connection,
+        Assembly migrationsAssembly,
+        long targetVersion,
+        VersionInfoConfiguration versionInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var available = AssemblyMigrationDiscovery.Discover(migrationsAssembly);
+        var applied = await VersionInfoReader
+            .ReadAsync(connection, versionInfo, cancellationToken)
+            .ConfigureAwait(false);
+
+        var plan = MigrationDownPlanBuilder.Build(available, applied, targetVersion);
+        var versionsStillAboveTarget = applied
+            .Where(x => x.Version > targetVersion)
+            .OrderByDescending(x => x.Version)
+            .ToArray();
+
+        if (!plan.TargetExists || !plan.TargetApplied || versionsStillAboveTarget.Length > 0)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("Migrator zakończył rollback, ale VersionInfo nie osiągnęło oczekiwanego stanu.");
+
+            if (!plan.TargetExists)
+            {
+                builder.AppendLine(
+                    $"Wersja docelowa {targetVersion} nie istnieje w assembly migracyjnym.");
+            }
+
+            if (!plan.TargetApplied)
+            {
+                builder.AppendLine(
+                    $"Wersja docelowa {targetVersion} nie istnieje w VersionInfo.");
+            }
+
+            if (versionsStillAboveTarget.Length > 0)
+            {
+                builder.AppendLine("Wersje nadal obecne powyżej celu:");
+                foreach (var migration in versionsStillAboveTarget)
+                {
+                    builder.AppendLine($"  - {migration.Version} {migration.Description}");
+                }
+            }
+
+            throw new MigrationRollbackException(builder.ToString().TrimEnd(), plan);
+        }
+    }
+
     public static string FormatPlan(MigrationPlan plan)
     {
         var builder = new StringBuilder();
@@ -83,6 +152,26 @@ public static class MigrationRuntimeGuard
         else
         {
             builder.Append(FormatMigrations("Migracje do wykonania", plan.Pending));
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    public static string FormatDownPlan(MigrationDownPlan plan)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Plan wycofania migracji");
+        builder.AppendLine($"Aktualna wersja: {plan.HighestApplied}");
+        builder.AppendLine($"Wersja docelowa: {plan.TargetVersion}");
+        builder.AppendLine();
+
+        if (plan.ToRollback.Count == 0)
+        {
+            builder.AppendLine("Brak migracji do wycofania.");
+        }
+        else
+        {
+            builder.Append(FormatMigrations("Migracje do wycofania", plan.ToRollback));
         }
 
         return builder.ToString().TrimEnd();
@@ -120,6 +209,40 @@ public static class MigrationRuntimeGuard
         {
             builder.AppendLine("VersionInfo zawiera wersje, których nie ma w assembly migracyjnym:");
             foreach (var migration in plan.UnknownApplied)
+            {
+                builder.AppendLine($"  - {migration.Version} {migration.Description}");
+            }
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string BuildDownErrorMessage(MigrationDownPlan plan)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("DATABASE ROLLBACK BLOCKED");
+        builder.AppendLine("Nie wycofano żadnej migracji.");
+        builder.AppendLine();
+
+        if (!plan.TargetExists)
+        {
+            builder.AppendLine(
+                $"Wersja docelowa {plan.TargetVersion} nie istnieje w assembly migracyjnym.");
+        }
+
+        if (!plan.TargetApplied)
+        {
+            builder.AppendLine(
+                $"Wersja docelowa {plan.TargetVersion} nie istnieje w VersionInfo. " +
+                "Wskaż wdrożoną migrację albo 0.");
+        }
+
+        if (plan.UnavailableToRollback.Count > 0)
+        {
+            builder.AppendLine(
+                "Nie można bezpiecznie wykonać Down, ponieważ brakuje implementacji " +
+                "wdrożonych migracji:");
+            foreach (var migration in plan.UnavailableToRollback)
             {
                 builder.AppendLine($"  - {migration.Version} {migration.Description}");
             }

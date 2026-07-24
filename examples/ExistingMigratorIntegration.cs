@@ -1,67 +1,93 @@
 using System.Data.Common;
+using System.Reflection;
 using FluentMigrator.Runner;
-using Microsoft.Extensions.Logging;
 using MigrationTool.Core.Configuration;
 using MigrationTool.Core.Runtime;
 
 namespace YourCompany.MigrationToolPackage;
 
-public sealed class SafeMigrationRunner
+// To jest jedyny publiczny punkt wejścia biblioteki używany przez aplikację.
+public sealed class MigrationTool
 {
-    private readonly IMigrationRunner _runner;
-    private readonly DbConnection _connection;
-    private readonly ILogger<SafeMigrationRunner> _logger;
-    private readonly IMigrationDatabaseLock _migrationLock;
-    private readonly VersionInfoConfiguration _versionInfo;
+    private readonly MigrationToolRunner _runner;
 
-    public SafeMigrationRunner(
-        IMigrationRunner runner,
-        DbConnection connection,
-        ILogger<SafeMigrationRunner> logger,
-        IMigrationDatabaseLock migrationLock,
-        VersionInfoConfiguration versionInfo)
+    public MigrationTool(
+        IConfiguredMigrationRunnerFactory runnerFactory,
+        IMigrationConnectionFactory connectionFactory,
+        IMigrationDatabaseLock migrationLock)
     {
-        _runner = runner;
-        _connection = connection;
-        _logger = logger;
-        _migrationLock = migrationLock;
-        _versionInfo = versionInfo;
+        _runner = new MigrationToolRunner(
+            new FluentMigrationExecutor(runnerFactory, connectionFactory, migrationLock));
     }
 
-    public async Task UpAsync(
-        long targetVersion,
+    public Task<MigrationRunResult> Run(
+        MigrationOptions options,
         CancellationToken cancellationToken = default)
+        => _runner.Run(options, cancellationToken);
+}
+
+internal sealed class FluentMigrationExecutor : IMigrationExecutor
+{
+    private readonly IConfiguredMigrationRunnerFactory _runnerFactory;
+    private readonly IMigrationConnectionFactory _connectionFactory;
+    private readonly IMigrationDatabaseLock _migrationLock;
+
+    public FluentMigrationExecutor(
+        IConfiguredMigrationRunnerFactory runnerFactory,
+        IMigrationConnectionFactory connectionFactory,
+        IMigrationDatabaseLock migrationLock)
     {
-        var migrationsAssembly = typeof(Program).Assembly;
+        _runnerFactory = runnerFactory;
+        _connectionFactory = connectionFactory;
+        _migrationLock = migrationLock;
+    }
 
-        // Lock musi obejmować walidację, wykonanie i weryfikację końcową.
-        await using var migrationLock = await _migrationLock.AcquireAsync(cancellationToken);
+    public Assembly MigrationsAssembly => typeof(Program).Assembly;
 
-        // Guard czyta całą tabelę VersionInfo. Nie opiera się na MAX(Version).
-        var plan = await MigrationRuntimeGuard.ValidateBeforeUpAsync(
-            _connection,
-            migrationsAssembly,
-            targetVersion,
-            _versionInfo,
-            cancellationToken);
+    public DbConnection CreateConnection(MigrationOptions options)
+        => _connectionFactory.Create(options.ConnectionString);
 
-        _logger.LogInformation("{MigrationPlan}", MigrationRuntimeGuard.FormatPlan(plan));
+    public Task<IAsyncDisposable> AcquireLockAsync(
+        MigrationOptions options,
+        CancellationToken cancellationToken)
+        => _migrationLock.AcquireAsync(options, cancellationToken);
 
-        // Tutaj pozostaje Wasz obecny runner, logowanie, obsługa schematów i lock DB.
-        _runner.MigrateUp(targetVersion);
+    public Task MigrateUpAsync(
+        MigrationOptions options,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var runner = _runnerFactory.Create(options);
+        runner.MigrateUp(options.Version);
+        return Task.CompletedTask;
+    }
 
-        // Ochrona przed sytuacją: runner zakończył się bez błędu, ale czegoś nie zapisał.
-        await MigrationRuntimeGuard.VerifyAfterUpAsync(
-            _connection,
-            migrationsAssembly,
-            targetVersion,
-            _versionInfo,
-            cancellationToken);
+    public Task MigrateDownAsync(
+        MigrationOptions options,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var runner = _runnerFactory.Create(options);
+        runner.MigrateDown(options.Version);
+        return Task.CompletedTask;
     }
 }
 
+// Fabryka powinna skonfigurować FluentMigratora wartościami z MigrationOptions:
+// ConnectionString, SchemaName, ReportSchemaName, Timeout oraz PreviewOnly=IsDryRun.
+public interface IConfiguredMigrationRunnerFactory
+{
+    IMigrationRunner Create(MigrationOptions options);
+}
+
+public interface IMigrationConnectionFactory
+{
+    DbConnection Create(string connectionString);
+}
 
 public interface IMigrationDatabaseLock
 {
-    Task<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken);
+    Task<IAsyncDisposable> AcquireAsync(
+        MigrationOptions options,
+        CancellationToken cancellationToken);
 }

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using MigrationTool.Core.Configuration;
+using MigrationTool.Core.Domain;
 using MigrationTool.Core.Git;
+using MigrationTool.Core.Runtime;
 using MigrationTool.Core.Services;
 
 var root = Path.Combine(Path.GetTempPath(), "migrationtool-smoke-" + Guid.NewGuid().ToString("N"));
@@ -76,6 +78,9 @@ try
         targetStore.Read(root, service.TargetVersionFiles[0]) == refreshed.Max(x => x.Version),
         "target_version powinno wskazywać najwyższą migrację.");
 
+    VerifyDownPlanning();
+    VerifyUnifiedRunApi();
+
     Console.WriteLine("MigrationTool smoke test: PASSED");
     return 0;
 }
@@ -89,6 +94,57 @@ finally
     {
         // Nie przesłaniamy wyniku testu problemem sprzątania katalogu tymczasowego.
     }
+}
+
+static void VerifyDownPlanning()
+{
+    var available = new[]
+    {
+        new RuntimeMigration(100, "Baseline", typeof(object)),
+        new RuntimeMigration(200, "AddCustomer", typeof(string)),
+        new RuntimeMigration(300, "AddCustomerIndex", typeof(int))
+    };
+    var applied = new[]
+    {
+        new AppliedMigration(100, "Baseline", null),
+        new AppliedMigration(200, "AddCustomer", null),
+        new AppliedMigration(300, "AddCustomerIndex", null)
+    };
+
+    var plan = MigrationDownPlanBuilder.Build(available, applied, 100);
+    Assert(plan.IsSafe, "Rollback do wdrożonej wersji powinien być bezpieczny.");
+    Assert(
+        plan.ToRollback.Select(x => x.Version).SequenceEqual(new long[] { 300, 200 }),
+        "Migracje Down powinny być planowane malejąco.");
+
+    var missingTarget = MigrationDownPlanBuilder.Build(available, applied, 150);
+    Assert(
+        !missingTarget.TargetExists && !missingTarget.TargetApplied && !missingTarget.IsSafe,
+        "Rollback do nieistniejącej wersji powinien zostać zablokowany.");
+
+    var incompleteAssembly = MigrationDownPlanBuilder.Build(
+        available.Where(x => x.Version != 300).ToArray(),
+        applied,
+        100);
+    Assert(
+        incompleteAssembly.UnavailableToRollback.Select(x => x.Version).SequenceEqual(new long[] { 300 }),
+        "Rollback powinien wykrywać brak implementacji wdrożonej migracji.");
+
+    var rollbackAll = MigrationDownPlanBuilder.Build(available, applied, 0);
+    Assert(rollbackAll.IsSafe, "Wartość 0 powinna umożliwiać wycofanie wszystkich migracji.");
+}
+
+static void VerifyUnifiedRunApi()
+{
+    _ = new MigrationOptions
+    {
+        ConnectionString = "Server=example;Database=example",
+        SchemaName = "orders",
+        ReportSchemaName = "orders_reports",
+        Version = 200,
+        Timeout = 60,
+        IsDryRun = true
+    };
 }
 
 static void CreateMigration(

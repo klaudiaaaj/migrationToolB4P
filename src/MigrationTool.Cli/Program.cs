@@ -2,7 +2,6 @@ using MigrationTool.Cli;
 using MigrationTool.Core.Configuration;
 using MigrationTool.Core.Domain;
 using MigrationTool.Core.Git;
-using MigrationTool.Core.Runtime;
 using MigrationTool.Core.Services;
 
 return await MainAsync(args);
@@ -36,7 +35,6 @@ static Task<int> MainAsync(string[] args)
             "validate" => RunValidate(cli, repositoryRoot, configuration, scanner, validator),
             "check" => RunCheck(cli, repositoryRoot, configuration, git, scanner, validator),
             "sync" => RunSync(cli, repositoryRoot, configuration, git, scanner, validator, targetStore),
-            "plan" => RunPlan(cli, repositoryRoot, configuration, scanner, targetStore),
             _ => throw new ArgumentException($"Nieznana komenda '{cli.Command}'.")
         });
     }
@@ -198,64 +196,6 @@ static int RunSync(
     return 0;
 }
 
-static int RunPlan(
-    CliArguments cli,
-    string repositoryRoot,
-    MigrationToolConfiguration configuration,
-    MigrationSourceScanner scanner,
-    TargetVersionStore targetStore)
-{
-    var service = configuration.GetRequiredService(cli.GetRequired("service"));
-    var migrations = scanner.ScanWorkingTree(repositoryRoot, service);
-    var targetVersion = cli.Get("target-version") is { } targetValue
-        ? long.Parse(targetValue)
-        : targetStore.Read(repositoryRoot, service.TargetVersionFiles[0]);
-    var applied = ParseAppliedVersions(cli.Get("applied"));
-
-    var runtimeMigrations = migrations
-        .Select(x => new RuntimeMigration(x.Version, x.DisplayName, typeof(object)))
-        .ToArray();
-    var appliedMigrations = applied
-        .Select(x => new AppliedMigration(x, null, null))
-        .ToArray();
-
-    var plan = MigrationPlanBuilder.Build(
-        runtimeMigrations,
-        appliedMigrations,
-        targetVersion,
-        failWhenDatabaseAhead: true,
-        requireAppliedVersionsInAssembly: false);
-
-    Console.WriteLine(MigrationRuntimeGuard.FormatPlan(plan));
-
-    if (!plan.TargetExists)
-    {
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("BŁĄD: target_version nie odpowiada żadnej migracji w projekcie.");
-        return 2;
-    }
-
-    if (plan.Late.Count > 0)
-    {
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("BŁĄD: wykryto migracje pominięte poniżej najwyższej wdrożonej wersji:");
-        foreach (var migration in plan.Late)
-        {
-            Console.Error.WriteLine($"  - {migration.Version} {migration.Name}");
-        }
-        return 2;
-    }
-
-    if (plan.DatabaseAhead)
-    {
-        Console.Error.WriteLine();
-        Console.Error.WriteLine("BŁĄD: baza jest nowsza niż target_version artefaktu.");
-        return 2;
-    }
-
-    return 0;
-}
-
 static string ResolveTargetRef(CliArguments cli)
 {
     if (cli.Get("target-ref") is { Length: > 0 } explicitRef)
@@ -271,21 +211,6 @@ static string ResolveTargetRef(CliArguments cli)
 
     throw new ArgumentException(
         "Brakuje --target-ref, a CI_MERGE_REQUEST_TARGET_BRANCH_NAME nie jest ustawione.");
-}
-
-static IReadOnlyList<long> ParseAppliedVersions(string? value)
-{
-    if (string.IsNullOrWhiteSpace(value))
-    {
-        return [];
-    }
-
-    return value
-        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        .Select(x => long.Parse(x))
-        .Distinct()
-        .OrderBy(x => x)
-        .ToArray();
 }
 
 static void PrintComparison(
@@ -337,7 +262,6 @@ Komendy:
   validate [--service NAME] [--config migrationtool.json]
   check    [--service NAME] --target-ref origin/develop
   sync     [--service NAME] --target-ref origin/develop [--dry-run]
-  plan     --service NAME --applied 100,200 [--target-version 300]
 
 Opcje wspólne:
   --repo PATH       katalog znajdujący się wewnątrz repozytorium Git

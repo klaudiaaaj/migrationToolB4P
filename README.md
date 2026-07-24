@@ -6,8 +6,9 @@ Gotowy szkielet rozszerzenia istniejącego `MigrationToolPackage` o:
 - `validate` — lokalna walidacja struktury,
 - `check` — porównanie z rzeczywistym branchem docelowym Merge Requesta,
 - `sync` — automatyczne przenumerowanie nowych migracji z brancha,
-- `plan` — prosty plan na podstawie wersji z `VersionInfo`,
-- runtime guard przed `up` i weryfikację po `up`.
+- jedno runtime API `Run(MigrationOptions)`, które automatycznie wybiera `up` albo `down`,
+- dry-run przez `MigrationOptions.IsDryRun`,
+- runtime guard przed wykonaniem i weryfikację po zmianie bazy.
 
 Kod celowo nie zależy od konkretnej wersji pakietu FluentMigrator w części Core. Runtime guard odkrywa atrybuty `FluentMigrator.MigrationAttribute` refleksją. Dzięki temu można go wpiąć do istniejącego wewnętrznego pakietu bez zastępowania obecnego runnera.
 
@@ -160,60 +161,61 @@ Warto dodatkowo włączyć w GitLabie:
 - merged results pipelines,
 - merge trains dla repozytoriów, w których często równolegle powstają migracje.
 
-## 5. Wpięcie runtime guard do istniejącego MigrationToolPackage
+## 5. Jedna metoda runtime: `Run`
 
-Dodaj referencję do `MigrationTool.Core`, a następnie przed obecnym `MigrateUp`:
+Aplikacja przekazuje tylko obiekt `MigrationOptions`:
 
 ```csharp
-var plan = await MigrationRuntimeGuard.ValidateBeforeUpAsync(
-    connection,
-    typeof(Program).Assembly,
-    targetVersion,
-    versionInfoOptions,
-    cancellationToken);
+var result = await migrationTool.Run(new MigrationOptions
+{
+    ConnectionString = connectionString,
+    SchemaName = "orders",
+    ReportSchemaName = "orders_reports",
+    Version = 20260723120000000,
+    Timeout = 120,
+    IsDryRun = false
+});
 
-logger.LogInformation("{Plan}", MigrationRuntimeGuard.FormatPlan(plan));
-runner.MigrateUp(targetVersion);
-
-await MigrationRuntimeGuard.VerifyAfterUpAsync(
-    connection,
-    typeof(Program).Assembly,
-    targetVersion,
-    versionInfoOptions,
-    cancellationToken);
+logger.LogInformation("{MigrationPlan}", result.Plan);
 ```
 
-Pełny przykład znajduje się w `examples/ExistingMigratorIntegration.cs`. Lock bazy musi zostać uzyskany przed `ValidateBeforeUpAsync` i pozostawać aktywny aż do zakończenia `VerifyAfterUpAsync`.
+Pola:
 
-Guard blokuje wdrożenie przed wykonaniem SQL, gdy:
+- `ConnectionString` — połączenie używane przez migrator i odczyt `VersionInfo`,
+- `SchemaName` — schemat migracji oraz tabeli `VersionInfo`,
+- `ReportSchemaName` — schemat raportowy przekazywany do istniejącej konfiguracji migratora,
+- `Version` — oczekiwana wersja końcowa,
+- `Timeout` — limit całej operacji w sekundach,
+- `IsDryRun` — uruchamia FluentMigratora w trybie preview bez zmiany bazy.
 
-- `target_version` nie odpowiada żadnej migracji w assembly,
-- istnieje niewdrożona migracja o wersji niższej niż najwyższa wersja z `VersionInfo`,
-- baza jest nowsza niż `target_version` i `failWhenDatabaseAhead=true`,
-- tabela `VersionInfo` nie istnieje, gdy `treatMissingVersionInfoAsEmpty=false`,
-- `requireAppliedVersionsInAssembly=true` i baza zawiera wersję nieobecną w assembly.
-
-Po `MigrateUp` guard ponownie czyta `VersionInfo` i sprawdza, czy wszystkie migracje do `target_version` zostały zapisane.
-
-## 6. Plan bez łączenia z bazą
-
-Przydatne do szybkiej diagnozy:
-
-```bash
-dotnet run --project tools/MigrationTool/src/MigrationTool.Cli -- \
-  plan --service Orders --applied 20260723100000000,20260723120000000
-```
-
-Przykład wykrycia luki:
+`Run` czyta najwyższą wersję z `VersionInfo` i automatycznie wybiera operację:
 
 ```text
-applied: 100,200
-available: 100,150,200
-
-BŁĄD: 150 jest niewdrożoną migracją poniżej najwyższej wdrożonej wersji 200.
+Version > aktualna wersja  → MigrateUp(Version)
+Version < aktualna wersja  → MigrateDown(Version)
+Version = aktualna wersja  → brak operacji
 ```
 
-## 7. Opcjonalna walidacja MSBuild
+Przed `up` sprawdzana jest pełna historia, więc luka typu `100` pominięte, ale `200`
+wdrożone nadal blokuje wykonanie. Przed `down` cel musi znajdować się w `VersionInfo`
+albo mieć wartość `0`. Po zwykłym wykonaniu `Run` ponownie sprawdza stan tabeli.
+Po dry-runie weryfikacja końcowa jest pomijana, ponieważ baza celowo się nie zmienia.
+
+`IMigrationExecutor` jest wewnętrznym adapterem do Waszej konfiguracji FluentMigratora.
+Fabryka runnera powinna ustawić na podstawie opcji:
+
+- connection string,
+- oba schematy,
+- timeout,
+- tryb `PreviewOnly` dla `IsDryRun=true`.
+
+Pełny przykład fasady i adaptera znajduje się w
+`examples/ExistingMigratorIntegration.cs`.
+
+Pomocnicze CLI służy już tylko do pracy ze źródłami (`new`, `validate`, `check`,
+`sync`). Komenda `plan` została usunięta — plan jest zawsze zwracany przez `Run`.
+
+## 6. Opcjonalna walidacja MSBuild
 
 Plik `build/MigrationValidation.targets` można zaimportować wyłącznie do projektów migracyjnych:
 
@@ -230,7 +232,7 @@ Target działa przed buildem, więc obejmie również standardowy `dotnet publis
 
 W dużym repozytorium lepiej pozostawić obowiązkową walidację w osobnym jobie CI, a target MSBuild traktować jako dodatkową kontrolę lokalną.
 
-## 8. Założenia i ograniczenia startera
+## 7. Założenia i ograniczenia startera
 
 - Foldery migracji są bezpośrednimi dziećmi `migrationRoot`.
 - Każdy folder zawiera dokładnie jedną unikalną wartość `[Migration(...)]`.
@@ -239,16 +241,16 @@ W dużym repozytorium lepiej pozostawić obowiązkową walidację w osobnym jobi
 - Runtime guard nie zastępuje blokady bazy. Obecny mechanizm lockowania w `MigrationToolPackage` powinien pozostać.
 - Regex analizuje typową składnię atrybutu FluentMigratora. Jeżeli używacie własnych atrybutów lub generatorów kodu, scanner należy rozszerzyć o Roslyn.
 
-## 9. Minimalny rollout
+## 8. Minimalny rollout
 
 1. Wdrożyć `validate` i `check` jako nieblokujący job MR.
 2. Po tygodniu poprawiania konfiguracji ustawić job jako obowiązkowy.
 3. Udostępnić developerom `new` i `sync`.
-4. Dodać runtime guard w trybie log-only na środowiskach testowych.
-5. Przełączyć runtime guard na fail-fast.
+4. Wpiąć `Run(MigrationOptions)` w trybie dry-run na środowiskach testowych.
+5. Przełączyć `IsDryRun` na `false` i egzekwować walidację fail-fast.
 6. Dopiero potem dodać opcjonalną walidację MSBuild.
 
-## 10. Smoke test scenariusza równoległych branchy
+## 9. Smoke test scenariusza równoległych branchy
 
 Po skopiowaniu narzędzia uruchom:
 
@@ -264,5 +266,3 @@ Test tworzy tymczasowe repozytorium Git i odtwarza scenariusz:
 4. błąd `MIGRATION_OLDER_THAN_TARGET_HEAD`,
 5. automatyczne `sync`,
 6. poprawna walidacja po przenumerowaniu.
-# migrationToolB4P
-# migrationToolB4P
