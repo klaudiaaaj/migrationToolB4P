@@ -106,9 +106,9 @@ static void VerifyDownPlanning()
     };
     var applied = new[]
     {
-        new AppliedMigration(100, "Baseline", null),
-        new AppliedMigration(200, "AddCustomer", null),
-        new AppliedMigration(300, "AddCustomerIndex", null)
+        new AppliedMigration(100),
+        new AppliedMigration(200),
+        new AppliedMigration(300)
     };
 
     var plan = MigrationDownPlanBuilder.Build(available, applied, 100);
@@ -136,6 +136,8 @@ static void VerifyDownPlanning()
 
 static void VerifyUnifiedRunApi()
 {
+    _ = new MigrationToolRunner(typeof(Program).Assembly);
+
     _ = new MigrationOptions
     {
         ConnectionString = "Server=example;Database=example",

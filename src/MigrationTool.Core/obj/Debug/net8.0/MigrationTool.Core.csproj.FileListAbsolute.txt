@@ -10,3 +10,4 @@
 /Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/refint/MigrationTool.Core.dll
 /Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.pdb
 /Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/ref/MigrationTool.Core.dll
+/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/obj/Debug/net8.0/MigrationTool.Core.csproj.AssemblyReference.cache

@@ -10,7 +10,9 @@ Gotowy szkielet rozszerzenia istniejącego `MigrationToolPackage` o:
 - dry-run przez `MigrationOptions.IsDryRun`,
 - runtime guard przed wykonaniem i weryfikację po zmianie bazy.
 
-Kod celowo nie zależy od konkretnej wersji pakietu FluentMigrator w części Core. Runtime guard odkrywa atrybuty `FluentMigrator.MigrationAttribute` refleksją. Dzięki temu można go wpiąć do istniejącego wewnętrznego pakietu bez zastępowania obecnego runnera.
+Runtime korzysta bezpośrednio z `FluentMigrator.Runner.SqlServer` 8.0.1.
+`MigrationToolRunner` sam tworzy i konfiguruje in-process runner, więc biblioteka
+nie wymaga dodatkowego adaptera.
 
 ## 1. Umieszczenie w repozytorium
 
@@ -65,12 +67,11 @@ Przykład:
 }
 ```
 
-Obsługiwane wartości `provider`:
-
-- `SqlServer`,
-- `PostgreSql`,
-- `MySql`,
-- `Sqlite`.
+Publiczne runtime API `MigrationToolRunner` wykonuje migracje bezpośrednio dla
+`SqlServer`. Historię wykonanych migracji odczytuje przez gotowe API
+FluentMigratora: `IVersionLoader.LoadVersionInfo()` oraz
+`VersionInfo.AppliedMigrations()`. Biblioteka nie wykonuje własnego zapytania
+`SELECT` do tabeli `VersionInfo`.
 
 `target_version` może być liczbą albo tekstem zawierającym cyfry. Wskazana właściwość powinna występować w pliku dokładnie raz.
 
@@ -181,7 +182,7 @@ logger.LogInformation("{MigrationPlan}", result.Plan);
 
 Pola:
 
-- `ConnectionString` — połączenie używane przez migrator i odczyt `VersionInfo`,
+- `ConnectionString` — połączenie używane przez FluentMigratora,
 - `SchemaName` — schemat migracji oraz tabeli `VersionInfo`,
 - `ReportSchemaName` — schemat raportowy przekazywany do istniejącej konfiguracji migratora,
 - `Version` — oczekiwana wersja końcowa,
@@ -201,16 +202,30 @@ wdrożone nadal blokuje wykonanie. Przed `down` cel musi znajdować się w `Vers
 albo mieć wartość `0`. Po zwykłym wykonaniu `Run` ponownie sprawdza stan tabeli.
 Po dry-runie weryfikacja końcowa jest pomijana, ponieważ baza celowo się nie zmienia.
 
-`IMigrationExecutor` jest wewnętrznym adapterem do Waszej konfiguracji FluentMigratora.
-Fabryka runnera powinna ustawić na podstawie opcji:
+`MigrationToolRunner` korzysta bezpośrednio z FluentMigratora dla SQL Server.
+Nie trzeba implementować `IMigrationExecutor`, fabryki runnera ani adaptera.
+Biblioteka samodzielnie:
 
-- connection string,
-- oba schematy,
-- timeout,
-- tryb `PreviewOnly` dla `IsDryRun=true`.
+- tworzy `SqlConnection`,
+- uzyskuje sesyjną blokadę przez `sp_getapplock`,
+- konfiguruje in-process runner FluentMigratora,
+- ustawia connection string, timeout i tabelę `VersionInfo`,
+- pobiera pełną listę wykonanych wersji przez `IVersionLoader`,
+- ustawia `PreviewOnly` dla `IsDryRun=true`,
+- wykonuje `MigrateUp` albo `MigrateDown`.
 
-Pełny przykład fasady i adaptera znajduje się w
-`examples/ExistingMigratorIntegration.cs`.
+`MigrationOptions` jest rejestrowany w kontenerze DI FluentMigratora. Migracje mogą
+więc pobierać w konstruktorze `MigrationOptions` i korzystać z `SchemaName` oraz
+`ReportSchemaName`.
+
+Runner tworzy się, wskazując assembly zawierające migracje:
+
+```csharp
+var migrationTool = new MigrationToolRunner(typeof(Program).Assembly);
+var result = await migrationTool.Run(options);
+```
+
+Minimalna fasada znajduje się w `examples/ExistingMigratorIntegration.cs`.
 
 Pomocnicze CLI służy już tylko do pracy ze źródłami (`new`, `validate`, `check`,
 `sync`). Komenda `plan` została usunięta — plan jest zawsze zwracany przez `Run`.
@@ -238,7 +253,7 @@ W dużym repozytorium lepiej pozostawić obowiązkową walidację w osobnym jobi
 - Każdy folder zawiera dokładnie jedną unikalną wartość `[Migration(...)]`.
 - Istniejące, wdrożone migracje powinny być niezmienne.
 - `sync` powinno być używane przed wdrożeniem migracji na współdzielone środowisko.
-- Runtime guard nie zastępuje blokady bazy. Obecny mechanizm lockowania w `MigrationToolPackage` powinien pozostać.
+- Runtime używa SQL Server i blokady `sp_getapplock` utrzymywanej przez czas całej operacji.
 - Regex analizuje typową składnię atrybutu FluentMigratora. Jeżeli używacie własnych atrybutów lub generatorów kodu, scanner należy rozszerzyć o Roslyn.
 
 ## 8. Minimalny rollout

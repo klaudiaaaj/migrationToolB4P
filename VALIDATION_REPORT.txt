@@ -3,5 +3,6 @@ Validation performed in the generation environment:
 - XML/MSBuild syntax: passed
 - GitLab YAML syntax: passed
 - Bash syntax: passed
+- FluentMigrator.Runner.SqlServer 8.0.1: restored
 - dotnet build MigrationToolStarter.sln: passed (.NET SDK 8.0.423)
 - dotnet run --project tests/MigrationTool.SmokeTests: passed

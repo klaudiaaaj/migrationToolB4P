@@ -1,23 +1,19 @@
-using System.Data.Common;
 using System.Reflection;
 using System.Text;
 using MigrationTool.Core.Configuration;
+using MigrationTool.Core.Domain;
 
 namespace MigrationTool.Core.Runtime;
 
 public static class MigrationRuntimeGuard
 {
-    public static async Task<MigrationPlan> ValidateBeforeUpAsync(
-        DbConnection connection,
+    public static MigrationPlan ValidateBeforeUp(
         Assembly migrationsAssembly,
+        IReadOnlyList<AppliedMigration> applied,
         long targetVersion,
-        VersionInfoConfiguration versionInfo,
-        CancellationToken cancellationToken = default)
+        VersionInfoConfiguration versionInfo)
     {
         var available = AssemblyMigrationDiscovery.Discover(migrationsAssembly);
-        var applied = await VersionInfoReader
-            .ReadAsync(connection, versionInfo, cancellationToken)
-            .ConfigureAwait(false);
 
         var plan = MigrationPlanBuilder.Build(
             available,
@@ -34,17 +30,13 @@ public static class MigrationRuntimeGuard
         return plan;
     }
 
-    public static async Task VerifyAfterUpAsync(
-        DbConnection connection,
+    public static void VerifyAfterUp(
         Assembly migrationsAssembly,
+        IReadOnlyList<AppliedMigration> applied,
         long targetVersion,
-        VersionInfoConfiguration versionInfo,
-        CancellationToken cancellationToken = default)
+        VersionInfoConfiguration versionInfo)
     {
         var available = AssemblyMigrationDiscovery.Discover(migrationsAssembly);
-        var applied = await VersionInfoReader
-            .ReadAsync(connection, versionInfo, cancellationToken)
-            .ConfigureAwait(false);
 
         var plan = MigrationPlanBuilder.Build(
             available,
@@ -64,17 +56,12 @@ public static class MigrationRuntimeGuard
         }
     }
 
-    public static async Task<MigrationDownPlan> ValidateBeforeDownAsync(
-        DbConnection connection,
+    public static MigrationDownPlan ValidateBeforeDown(
         Assembly migrationsAssembly,
-        long targetVersion,
-        VersionInfoConfiguration versionInfo,
-        CancellationToken cancellationToken = default)
+        IReadOnlyList<AppliedMigration> applied,
+        long targetVersion)
     {
         var available = AssemblyMigrationDiscovery.Discover(migrationsAssembly);
-        var applied = await VersionInfoReader
-            .ReadAsync(connection, versionInfo, cancellationToken)
-            .ConfigureAwait(false);
 
         var plan = MigrationDownPlanBuilder.Build(available, applied, targetVersion);
         if (!plan.IsSafe)
@@ -85,17 +72,12 @@ public static class MigrationRuntimeGuard
         return plan;
     }
 
-    public static async Task VerifyAfterDownAsync(
-        DbConnection connection,
+    public static void VerifyAfterDown(
         Assembly migrationsAssembly,
-        long targetVersion,
-        VersionInfoConfiguration versionInfo,
-        CancellationToken cancellationToken = default)
+        IReadOnlyList<AppliedMigration> applied,
+        long targetVersion)
     {
         var available = AssemblyMigrationDiscovery.Discover(migrationsAssembly);
-        var applied = await VersionInfoReader
-            .ReadAsync(connection, versionInfo, cancellationToken)
-            .ConfigureAwait(false);
 
         var plan = MigrationDownPlanBuilder.Build(available, applied, targetVersion);
         var versionsStillAboveTarget = applied
@@ -125,7 +107,7 @@ public static class MigrationRuntimeGuard
                 builder.AppendLine("Wersje nadal obecne powyżej celu:");
                 foreach (var migration in versionsStillAboveTarget)
                 {
-                    builder.AppendLine($"  - {migration.Version} {migration.Description}");
+                    builder.AppendLine($"  - {migration.Version}");
                 }
             }
 
@@ -210,7 +192,7 @@ public static class MigrationRuntimeGuard
             builder.AppendLine("VersionInfo zawiera wersje, których nie ma w assembly migracyjnym:");
             foreach (var migration in plan.UnknownApplied)
             {
-                builder.AppendLine($"  - {migration.Version} {migration.Description}");
+                builder.AppendLine($"  - {migration.Version}");
             }
         }
 
@@ -244,7 +226,7 @@ public static class MigrationRuntimeGuard
                 "wdrożonych migracji:");
             foreach (var migration in plan.UnavailableToRollback)
             {
-                builder.AppendLine($"  - {migration.Version} {migration.Description}");
+                builder.AppendLine($"  - {migration.Version}");
             }
         }
 

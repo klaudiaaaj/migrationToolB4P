@@ -26,7 +26,6 @@ src/MigrationTool.Core/Runtime/MigrationPlan.cs
 src/MigrationTool.Core/Runtime/MigrationRollbackException.cs
 src/MigrationTool.Core/Runtime/MigrationRuntimeGuard.cs
 src/MigrationTool.Core/Runtime/MigrationToolRunner.cs
-src/MigrationTool.Core/Runtime/VersionInfoReader.cs
 src/MigrationTool.Core/Services/MigrationGenerator.cs
 src/MigrationTool.Core/Services/MigrationSourceScanner.cs
 src/MigrationTool.Core/Services/MigrationSynchronizer.cs

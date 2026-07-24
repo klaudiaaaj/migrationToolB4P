@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MigrationTool.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d4d7cf8d1a6e053b975ce9c6e021150b7339c7a0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ed30a1629ea5142b63a14de3e7ff8d57b495ab8a")]
 [assembly: System.Reflection.AssemblyProductAttribute("MigrationTool.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MigrationTool.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

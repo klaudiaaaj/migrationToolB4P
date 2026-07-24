@@ -12,7 +12,4 @@ public sealed record MigrationDescriptor(
     public string DisplayName => $"{Version}_{Name}";
 }
 
-public sealed record AppliedMigration(
-    long Version,
-    string? Description,
-    DateTimeOffset? AppliedOn);
+public sealed record AppliedMigration(long Version);
