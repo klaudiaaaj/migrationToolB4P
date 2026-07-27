@@ -1,42 +1,89 @@
-# MigrationTool Starter dla .NET 8
+# MigrationTool.Core
 
-Gotowy szkielet rozszerzenia istniejącego `MigrationToolPackage` o:
+Biblioteka NuGet dla .NET 8 zawierająca:
 
-- `new` — tworzenie folderu, klasy `[Migration(...)]` i aktualizacja `target_version`,
-- `validate` — lokalna walidacja struktury,
-- `check` — porównanie z rzeczywistym branchem docelowym Merge Requesta,
-- `sync` — automatyczne przenumerowanie nowych migracji z brancha,
-- jedno runtime API `Run(MigrationOptions)`, które automatycznie wybiera `up` albo `down`,
-- dry-run przez `MigrationOptions.IsDryRun`,
-- runtime guard przed wykonaniem i weryfikację po zmianie bazy.
+- publiczne API do generowania, walidowania, porównywania i synchronizowania
+  migracji w repozytorium,
+- runtime `MigrationToolRunner.Run(MigrationOptions)`, który bezpiecznie wykonuje
+  `up` albo `down`,
+- integrację z FluentMigratorem i SQL Server.
 
-Runtime korzysta bezpośrednio z `FluentMigrator.Runner.SqlServer` 8.0.1.
-`MigrationToolRunner` sam tworzy i konfiguruje in-process runner, więc biblioteka
-nie wymaga dodatkowego adaptera.
+Pakiet nie zawiera CLI, parsera argumentów ani punktu wejścia `Program.cs`.
 
-## 1. Umieszczenie w repozytorium
-
-Proponowana lokalizacja:
+## Architektura
 
 ```text
-repo/
-├── migrationtool.json
-├── tools/
-│   └── MigrationTool/
-│       ├── src/
-│       ├── scripts/
-│       └── ...
-└── src/
-    ├── Orders/
-    ├── Billing/
-    └── Identity/
+Repozytorium paczki NuGet
+└── MigrationTool.Core — biblioteka i publiczne API
+        ▲
+        │ PackageReference
+Repozytorium aplikacji
+├── src/Application
+└── src/Application.Cli — parser, Console i kody procesu
+        ▲
+        │
+GitLab Pipeline
 ```
 
-Skopiuj katalog startera jako `tools/MigrationTool`, a plik `migrationtool.example.json` jako `migrationtool.json` w katalogu głównym repozytorium. Następnie popraw ścieżki i namespace'y.
+Projekt `MigrationTool.Core` nie ma `OutputType=Exe`, `PackAsTool` ani
+`ToolCommandName`. Jego `PackageId` pozostaje `MigrationTool.Core`, a domyślna
+wersja pakietu to `1.0.0`.
 
-## 2. Konfiguracja
+## Publiczne API dla operacji repozytoryjnych
 
-Przykład:
+Serwis tworzy się dla katalogu znajdującego się w repozytorium Git:
+
+```csharp
+var migrations = new MigrationWorkspaceService(
+    repositoryPath: repositoryRoot,
+    configurationPath: "migrationtool.json");
+```
+
+Dostępne operacje:
+
+```csharp
+await migrations.GenerateAsync(
+    new GenerateMigrationRequest("Orders", "AddCustomerStatus"),
+    cancellationToken);
+
+var validation = await migrations.ValidateAsync(
+    new ValidateMigrationsRequest("Orders"),
+    cancellationToken);
+
+var check = await migrations.CheckAsync(
+    new CheckMigrationsRequest("origin/develop", "Orders"),
+    cancellationToken);
+
+var synchronization = await migrations.SynchronizeAsync(
+    new SynchronizeMigrationsRequest(
+        TargetRef: "origin/develop",
+        ServiceName: "Orders",
+        IsDryRun: false),
+    cancellationToken);
+```
+
+API:
+
+- przyjmuje jawne requesty,
+- zwraca jawne rezultaty,
+- respektuje `CancellationToken`,
+- nie wypisuje niczego przez `Console`,
+- nie zwraca kodów procesu,
+- zgłasza wyjątki dla błędów infrastruktury i niepoprawnych argumentów.
+
+Opcjonalna rejestracja w kontenerze aplikacji:
+
+```csharp
+services.AddMigrationToolServices(
+    repositoryPath: environment.ContentRootPath,
+    configurationPath: "migrationtool.json");
+```
+
+Operacje plikowe i Git pozostają synchroniczne wewnątrz obecnej implementacji,
+dlatego metody kończą się `Async`, ale nie przenoszą pracy sztucznie do
+`Task.Run`. Token anulowania jest sprawdzany przed każdym etapem operacji.
+
+## Konfiguracja repozytorium
 
 ```json
 {
@@ -56,223 +103,133 @@ Przykład:
 }
 ```
 
-Publiczne runtime API `MigrationToolRunner` wykonuje migracje bezpośrednio dla
-`SqlServer`. Migracje z assembly pobiera przez
-`MigrationLoader.LoadMigrations()`, a historię wykonanych migracji przez
-`IVersionLoader.LoadVersionInfo()` i `VersionInfo.AppliedMigrations()`.
-Biblioteka nie skanuje assembly własną refleksją i nie wykonuje własnego
-zapytania `SELECT` do tabeli `VersionInfo`.
+Kompletny przykład znajduje się w
+[migrationtool.example.json](migrationtool.example.json).
 
-`target_version` może być liczbą albo tekstem zawierającym cyfry. Wskazana właściwość powinna występować w pliku dokładnie raz.
+## Użycie runtime bez CLI
 
-## 3. Codzienna praca developera
-
-### Nowa migracja
-
-```bash
-dotnet run --project tools/MigrationTool/src/MigrationTool.Cli -- \
-  new --service Orders --name AddCustomerStatus
-```
-
-Narzędzie:
-
-1. generuje 17-cyfrowy timestamp UTC z milisekundami,
-2. tworzy folder `[timestamp]_AddCustomerStatus`,
-3. tworzy klasę z `[Migration(timestamp)]`,
-4. aktualizuje wszystkie skonfigurowane pliki `target_version`.
-
-### Lokalna walidacja
-
-```bash
-dotnet run --project tools/MigrationTool/src/MigrationTool.Cli -- validate
-```
-
-Sprawdzane są:
-
-- duplikaty wersji,
-- zgodność folderu z atrybutem,
-- obecność klasy migracji,
-- zgodność `target_version` z najwyższą migracją.
-
-### Sprawdzenie względem target brancha
-
-```bash
-git fetch origin +develop:refs/remotes/origin/develop
-
-dotnet run --project tools/MigrationTool/src/MigrationTool.Cli -- \
-  check --target-ref origin/develop
-```
-
-Dla MR target branch nie jest zakodowany na stałe. GitLab przekazuje go przez `CI_MERGE_REQUEST_TARGET_BRANCH_NAME`.
-
-### Automatyczna naprawa kolejności
-
-Najpierw podgląd:
-
-```bash
-dotnet run --project tools/MigrationTool/src/MigrationTool.Cli -- \
-  sync --target-ref origin/develop --dry-run
-```
-
-Następnie zmiana plików:
-
-```bash
-./tools/MigrationTool/scripts/sync-with-target.sh develop
-
-git diff
-git add .
-git commit -m "Synchronize migration versions"
-```
-
-`sync` przenumerowuje wszystkie migracje występujące tylko w source branchu, gdy przynajmniej jedna z nich jest starsza od headu target brancha. Zachowuje ich wzajemną kolejność.
-
-Narzędzie nie przenumeruje automatycznie migracji, która ma tę samą nazwę i wersję co migracja w target branchu, ale inną zawartość. Taki przypadek jest traktowany jako próba zmiany istniejącej historii i wymaga rebase'u lub ręcznej analizy.
-
-## 4. GitLab CI
-
-Dołącz `.gitlab/validate-migrations.yml` do głównego pipeline'u:
-
-```yaml
-include:
-  - local: 'tools/MigrationTool/.gitlab/validate-migrations.yml'
-```
-
-Job wykonuje:
-
-```bash
-git fetch origin "+${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
-migrationtool check --target-ref "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
-```
-
-Ustaw `GIT_DEPTH: "0"`, aby porównanie działało również dla dłużej żyjących branchy.
-
-Warto dodatkowo włączyć w GitLabie:
-
-- wymagany zielony pipeline MR,
-- merged results pipelines,
-- merge trains dla repozytoriów, w których często równolegle powstają migracje.
-
-## 5. Jedna metoda runtime: `Run`
-
-Aplikacja przekazuje tylko obiekt `MigrationOptions`:
+Główna aplikacja wywołuje bibliotekę bez uruchamiania procesu:
 
 ```csharp
-await migrationTool.Run(new MigrationOptions
+public sealed class DatabaseMigrationService
 {
-    ConnectionString = connectionString,
-    SchemaName = "orders",
-    ReportSchemaName = "orders_reports",
-    Version = 20260723120000000,
-    Timeout = 120,
-    IsDryRun = false
-});
+    private readonly MigrationToolRunner _runner =
+        new(typeof(DatabaseMigrationService).Assembly);
+
+    public Task<MigrationRunResult> MigrateAsync(
+        string connectionString,
+        long version,
+        CancellationToken cancellationToken)
+        => _runner.Run(
+            new MigrationOptions
+            {
+                ConnectionString = connectionString,
+                SchemaName = "orders",
+                ReportSchemaName = "orders_reports",
+                Version = version,
+                Timeout = 120,
+                IsDryRun = false
+            },
+            cancellationToken);
+}
 ```
 
-Pola:
-
-- `ConnectionString` — połączenie używane przez FluentMigratora,
-- `SchemaName` — schemat migracji oraz tabeli `VersionInfo`,
-- `ReportSchemaName` — schemat raportowy przekazywany do istniejącej konfiguracji migratora,
-- `Version` — oczekiwana wersja końcowa,
-- `Timeout` — limit całej operacji w sekundach,
-- `IsDryRun` — uruchamia FluentMigratora w trybie preview bez zmiany bazy.
-
-`Run` czyta najwyższą wersję z `VersionInfo` i automatycznie wybiera operację:
+`Run` pobiera listę migracji z FluentMigratora, odczytuje całe `VersionInfo`,
+sprawdza spójność historii i wybiera:
 
 ```text
-Version > aktualna wersja  → MigrateUp(Version)
-Version < aktualna wersja  → MigrateDown(Version)
-Version = aktualna wersja  → brak operacji
+target > current → MigrateUp(target)
+target < current → MigrateDown(target)
+target = current → brak operacji
 ```
 
-Przed wykonaniem sprawdzane jest tylko to, co wpływa na bezpieczeństwo:
+Aplikacja nie powinna uruchamiać CLI, wywoływać `Program.cs`, budować tablicy
+argumentów ani parsować własnych danych parserem CLI.
 
-- wersja docelowa istnieje w assembly albo wynosi `0`,
-- każda zastosowana migracja z `VersionInfo` istnieje w assembly,
-- poniżej aktualnej wersji bazy nie ma pominiętych migracji,
-- dla `down` wersja docelowa istnieje w `VersionInfo` albo wynosi `0`.
+## Projekt CLI w aplikacji
 
-Jeżeli którykolwiek warunek nie jest spełniony, `Run` zgłasza
-`MigrationSafetyException` przed wykonaniem SQL. Po zwykłym wykonaniu sprawdza,
-czy `VersionInfo` dokładnie odpowiada wybranej wersji. Po dry-runie kontrola
-końcowa jest pomijana, ponieważ baza celowo się nie zmienia.
+Gotowy wzorzec znajduje się w
+[examples/Application.Cli](examples/Application.Cli/README.md). Zawiera:
 
-`MigrationToolRunner` korzysta bezpośrednio z FluentMigratora dla SQL Server.
-Nie trzeba implementować `IMigrationExecutor`, fabryki runnera ani adaptera.
-Biblioteka samodzielnie:
+- `Application.Cli.csproj` z `OutputType=Exe` i `PackageReference`,
+- parser dotychczasowych argumentów,
+- `Program.cs` mapujący `new`, `validate`, `check` i `sync` na publiczne API,
+- obsługę `Ctrl+C`, błędów oraz kodów `0`, `2` i `130`,
+- dwa warianty GitLab CI,
+- opcjonalny target MSBuild.
 
-- tworzy `SqlConnection`,
-- uzyskuje sesyjną blokadę przez `sp_getapplock`,
-- konfiguruje in-process runner FluentMigratora,
-- ustawia connection string, timeout i tabelę `VersionInfo`,
-- pobiera pełną listę wykonanych wersji przez `IVersionLoader`,
-- ustawia `PreviewOnly` dla `IsDryRun=true`,
-- wykonuje `MigrateUp` albo `MigrateDown`.
-
-`MigrationOptions` jest rejestrowany w kontenerze DI FluentMigratora. Migracje mogą
-więc pobierać w konstruktorze `MigrationOptions` i korzystać z `SchemaName` oraz
-`ReportSchemaName`.
-
-Runner tworzy się, wskazując assembly zawierające migracje:
-
-```csharp
-var migrationTool = new MigrationToolRunner(typeof(Program).Assembly);
-await migrationTool.Run(options);
-```
-
-Minimalna fasada znajduje się w `examples/ExistingMigratorIntegration.cs`.
-
-Pomocnicze CLI służy już tylko do pracy ze źródłami (`new`, `validate`, `check`,
-`sync`). Komenda `plan` oraz modele planowania runtime zostały usunięte.
-
-## 6. Opcjonalna walidacja MSBuild
-
-Plik `build/MigrationValidation.targets` można zaimportować wyłącznie do projektów migracyjnych:
-
-```xml
-<PropertyGroup>
-  <MigrationServiceName>Orders</MigrationServiceName>
-  <MigrationValidationEnabled>true</MigrationValidationEnabled>
-</PropertyGroup>
-
-<Import Project="../../../tools/MigrationTool/build/MigrationValidation.targets" />
-```
-
-Target działa przed buildem, więc obejmie również standardowy `dotnet publish`, który wcześniej uruchamia build. Nie importuj targetu do projektu samego MigrationTool.
-
-W dużym repozytorium lepiej pozostawić obowiązkową walidację w osobnym jobie CI, a target MSBuild traktować jako dodatkową kontrolę lokalną.
-
-## 7. Założenia i ograniczenia startera
-
-- Foldery migracji są bezpośrednimi dziećmi `migrationRoot`.
-- Każdy folder zawiera dokładnie jedną unikalną wartość `[Migration(...)]`.
-- Istniejące, wdrożone migracje powinny być niezmienne.
-- `sync` powinno być używane przed wdrożeniem migracji na współdzielone środowisko.
-- Runtime używa SQL Server i blokady `sp_getapplock` utrzymywanej przez czas całej operacji.
-- Regex analizuje typową składnię atrybutu FluentMigratora. Jeżeli używacie własnych atrybutów lub generatorów kodu, scanner należy rozszerzyć o Roslyn.
-
-## 8. Minimalny rollout
-
-1. Wdrożyć `validate` i `check` jako nieblokujący job MR.
-2. Po tygodniu poprawiania konfiguracji ustawić job jako obowiązkowy.
-3. Udostępnić developerom `new` i `sync`.
-4. Wpiąć `Run(MigrationOptions)` w trybie dry-run na środowiskach testowych.
-5. Przełączyć `IsDryRun` na `false` i egzekwować walidację fail-fast.
-6. Dopiero potem dodać opcjonalną walidację MSBuild.
-
-## 9. Smoke test scenariusza równoległych branchy
-
-Po skopiowaniu narzędzia uruchom:
+Po skopiowaniu do aplikacji:
 
 ```bash
-dotnet run --project tools/MigrationTool/tests/MigrationTool.SmokeTests
+dotnet run \
+  --project src/Application.Cli/Application.Cli.csproj \
+  -- \
+  check \
+  --target-ref origin/develop
 ```
 
-Test tworzy tymczasowe repozytorium Git i odtwarza scenariusz:
+## GitLab CI
 
-1. wspólny baseline,
-2. starsza migracja na branchu feature,
-3. nowszy hotfix na branchu target,
-4. błąd `MIGRATION_OLDER_THAN_TARGET_HEAD`,
-5. automatyczne `sync`,
-6. poprawna walidacja po przenumerowaniu.
+Pełny przykład jest w
+[examples/Application.Cli/gitlab-ci.yml](examples/Application.Cli/gitlab-ci.yml).
+
+Wariant bez osobnego joba build:
+
+```yaml
+script:
+  - dotnet restore src/Application.Cli/Application.Cli.csproj
+  - >
+    dotnet run
+    --project src/Application.Cli/Application.Cli.csproj
+    --configuration Release
+    --no-restore
+    --
+    check
+    --repo "$CI_PROJECT_DIR"
+    --target-ref "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+```
+
+Wariant z wcześniejszym buildem uruchamia bezpośrednio:
+
+```bash
+dotnet src/Application.Cli/bin/Release/net8.0/Application.Cli.dll check ...
+```
+
+Kod różny od zera zwrócony przez `Application.Cli` automatycznie kończy job
+błędem. Sekrety należy przechowywać jako chronione i maskowane zmienne GitLab
+CI/CD oraz odczytywać w `Program.cs` przez `Environment.GetEnvironmentVariable`;
+nie należy przekazywać ich w argumentach procesu.
+
+## Budowanie i pakowanie
+
+```bash
+dotnet restore MigrationToolStarter.sln
+dotnet build MigrationToolStarter.sln --configuration Release --no-restore
+dotnet run --project tests/MigrationTool.SmokeTests --configuration Release --no-build
+dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj \
+  --configuration Release \
+  --no-build \
+  --output artifacts/packages
+```
+
+`dotnet pack` tworzy zwykły pakiet biblioteczny. Nie publikuje go i nie zmienia
+pipeline'u release.
+
+## Kompatybilność i migracja
+
+Publiczne API runtime oraz niskopoziomowe serwisy biblioteki pozostały dostępne.
+Breaking changes dotyczą wyłącznie dawnej warstwy CLI:
+
+- usunięto projekt `MigrationTool.Cli` z solution,
+- usunięto znajdujący się w repozytorium `Program.cs` i parser,
+- usunięto skrypty uruchamiające lokalny projekt CLI,
+- pipeline aplikacji musi wskazać własny `Application.Cli.csproj`.
+
+Zalecana kolejność migracji:
+
+1. opublikować nową wersję `MigrationTool.Core`,
+2. dodać `Application.Cli` do repozytorium aplikacji,
+3. odtworzyć komendy przy użyciu publicznego `MigrationWorkspaceService`,
+4. przełączyć joby GitLab na projekt aplikacji,
+5. usunąć stare wywołania CLI z repozytoriów konsumujących,
+6. dopiero wtedy zaktualizować `PackageReference`.

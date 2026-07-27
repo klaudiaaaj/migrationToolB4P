@@ -1,8 +1,22 @@
-Validation performed in the generation environment:
-- JSON syntax: passed
-- XML/MSBuild syntax: passed
-- GitLab YAML syntax: passed
-- Bash syntax: passed
-- FluentMigrator.Runner.SqlServer 8.0.1: restored
-- dotnet build MigrationToolStarter.sln: passed (.NET SDK 8.0.423)
-- dotnet run --project tests/MigrationTool.SmokeTests: passed
+Validation performed after extracting CLI:
+- dotnet restore MigrationToolStarter.sln: passed
+- dotnet build MigrationToolStarter.sln --configuration Release --no-restore: passed
+- dotnet test MigrationToolStarter.sln --configuration Release --no-build --no-restore: passed
+  (the solution uses an executable smoke test rather than a test SDK project)
+- dotnet run --project tests/MigrationTool.SmokeTests --configuration Release --no-build: passed
+- dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj --configuration Release: passed
+- local PackageReference restore for examples/Application.Cli: passed
+- dotnet build examples/Application.Cli/Application.Cli.csproj --configuration Release: passed
+- Application.Cli --help: exit code 0
+- invalid Application.Cli invocation: non-zero exit code 2
+- package contents: library DLL only; no CLI executable
+- git diff --check: passed
+
+Environment:
+- .NET SDK 8.0.423
+- FluentMigrator.Runner.SqlServer 8.0.1
+
+Package:
+- artifacts/packages/MigrationTool.Core.1.0.0.nupkg
+- NuGet emitted one advisory that the package does not contain a package README.
+  Package metadata was intentionally not changed as part of CLI extraction.

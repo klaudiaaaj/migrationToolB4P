@@ -1,0 +1,72 @@
+stages:
+  - build
+  - validate
+
+variables:
+  GIT_DEPTH: "0"
+
+# Wariant A: restore, build i uruchomienie przez dotnet run.
+validate-migrations-run:
+  stage: validate
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  before_script:
+    - git fetch origin "+${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+    - dotnet restore src/Application.Cli/Application.Cli.csproj
+  script:
+    - >
+      dotnet run
+      --project src/Application.Cli/Application.Cli.csproj
+      --configuration Release
+      --no-restore
+      --
+      check
+      --repo "$CI_PROJECT_DIR"
+      --config migrationtool.json
+      --target-ref "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+
+# Wariant B: osobny build, a następnie bezpośrednie uruchomienie DLL.
+build-application-cli:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  script:
+    - dotnet restore src/Application.Cli/Application.Cli.csproj
+    - >
+      dotnet build
+      src/Application.Cli/Application.Cli.csproj
+      --configuration Release
+      --no-restore
+  artifacts:
+    paths:
+      - src/Application.Cli/bin/Release/net8.0/
+    expire_in: 1 day
+
+validate-migrations-dll:
+  stage: validate
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  needs:
+    - job: build-application-cli
+      artifacts: true
+  before_script:
+    - git fetch origin "+${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+  script:
+    - >
+      dotnet
+      src/Application.Cli/bin/Release/net8.0/Application.Cli.dll
+      check
+      --repo "$CI_PROJECT_DIR"
+      --config migrationtool.json
+      --target-ref "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+  artifacts:
+    when: always
+    paths:
+      - generated/
+    expire_in: 1 day
+
+# Sekretów nie przekazuj jako argumentów. Program.cs powinien odczytać je ze
+# zmiennych chronionych/maskowanych, np. MIGRATION_CONNECTION_STRING:
+#
+# var connectionString =
+#     Environment.GetEnvironmentVariable("MIGRATION_CONNECTION_STRING")
+#     ?? throw new InvalidOperationException("Brak connection string.");

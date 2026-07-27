@@ -4,8 +4,6 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationTool.Core", "src/MigrationTool.Core/MigrationTool.Core.csproj", "{F4E154B1-EB98-4A52-AE73-1E6075C2D8A1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationTool.Cli", "src/MigrationTool.Cli/MigrationTool.Cli.csproj", "{A19B86A6-E0ED-4EA4-86F0-D48E68BEFC80}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationTool.SmokeTests", "tests/MigrationTool.SmokeTests/MigrationTool.SmokeTests.csproj", "{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}"
 EndProject
 Global
@@ -18,11 +16,6 @@ Global
 		{F4E154B1-EB98-4A52-AE73-1E6075C2D8A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F4E154B1-EB98-4A52-AE73-1E6075C2D8A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F4E154B1-EB98-4A52-AE73-1E6075C2D8A1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A19B86A6-E0ED-4EA4-86F0-D48E68BEFC80}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A19B86A6-E0ED-4EA4-86F0-D48E68BEFC80}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A19B86A6-E0ED-4EA4-86F0-D48E68BEFC80}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A19B86A6-E0ED-4EA4-86F0-D48E68BEFC80}.Release|Any CPU.Build.0 = Release|Any CPU
-
 		{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}.Release|Any CPU.ActiveCfg = Release|Any CPU

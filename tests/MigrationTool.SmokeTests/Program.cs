@@ -1,6 +1,6 @@
 using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using MigrationTool.Core.Configuration;
-using MigrationTool.Core.Git;
 using MigrationTool.Core.Runtime;
 using MigrationTool.Core.Services;
 
@@ -45,36 +45,64 @@ try
 
     RunGit(root, "checkout", "feature");
 
-    var scanner = new MigrationSourceScanner();
-    var targetStore = new TargetVersionStore();
-    var validator = new MigrationValidator(targetStore);
-    var synchronizer = new MigrationSynchronizer(scanner, targetStore);
-    var git = new GitClient(root);
+    WriteConfiguration(root, service);
+    var api = new MigrationWorkspaceService(root);
+    using var registeredServices = new ServiceCollection()
+        .AddMigrationToolServices(root)
+        .BuildServiceProvider();
+    Assert(
+        registeredServices.GetRequiredService<MigrationWorkspaceService>() is not null,
+        "AddMigrationToolServices powinno zarejestrować publiczne API.");
 
-    var current = scanner.ScanWorkingTree(root, service);
-    var target = scanner.ScanGitRef(git, "target", service);
-    var before = validator.ValidateAgainstTarget(service, current, target, "target");
+    await AssertThrowsAsync<InvalidOperationException>(
+        () => api.CheckAsync(new CheckMigrationsRequest("missing-ref")),
+        "CheckAsync powinno zgłosić błąd dla nieistniejącego refa.");
+
+    using (var cancelled = new CancellationTokenSource())
+    {
+        cancelled.Cancel();
+        await AssertThrowsAsync<OperationCanceledException>(
+            () => api.ValidateAsync(
+                new ValidateMigrationsRequest(),
+                cancelled.Token),
+            "Publiczne API powinno respektować CancellationToken.");
+    }
+
+    var before = await api.CheckAsync(new CheckMigrationsRequest("target"));
 
     Assert(
-        before.Messages.Any(x => x.Code == "MIGRATION_OLDER_THAN_TARGET_HEAD"),
+        before.Services
+            .Single()
+            .Validation.Messages
+            .Any(x => x.Code == "MIGRATION_OLDER_THAN_TARGET_HEAD"),
         "Walidator powinien wykryć migrację starszą od target head.");
 
-    var plan = synchronizer.BuildPlan(current, target);
-    Assert(plan.Changes.Count == 1, "Sync powinien przenumerować jedną migrację feature.");
+    var dryRun = await api.SynchronizeAsync(
+        new SynchronizeMigrationsRequest("target", IsDryRun: true));
+    Assert(dryRun.HasChanges, "Dry-run powinien wykryć zmianę numeru.");
+
+    var synchronization = await api.SynchronizeAsync(
+        new SynchronizeMigrationsRequest("target"));
+    var change = synchronization.Services.Single().Changes.Single();
     Assert(
-        plan.Changes[0].NewVersion > 20260103000000000,
+        change.NewVersion > 20260103000000000,
         "Nowa wersja powinna być większa od hotfixu.");
 
-    synchronizer.Apply(root, service, plan);
-
-    var refreshed = scanner.ScanWorkingTree(root, service);
-    var after = validator.ValidateAgainstTarget(service, refreshed, target, "target");
-    var structure = validator.ValidateStructure(root, service, refreshed);
+    var after = await api.CheckAsync(new CheckMigrationsRequest("target"));
+    var structure = await api.ValidateAsync(new ValidateMigrationsRequest());
 
     Assert(after.IsValid, "Walidacja względem targetu powinna przejść po sync.");
     Assert(structure.IsValid, "Walidacja strukturalna powinna przejść po sync.");
+
+    var generated = await api.GenerateAsync(
+        new GenerateMigrationRequest("Orders", "GeneratedByPublicApi"));
     Assert(
-        targetStore.Read(root, service.TargetVersionFiles[0]) == refreshed.Max(x => x.Version),
+        generated.Migration.Version > change.NewVersion,
+        "Publiczne GenerateAsync powinno utworzyć kolejną migrację.");
+
+    var targetStore = new TargetVersionStore();
+    Assert(
+        targetStore.Read(root, service.TargetVersionFiles[0]) == generated.Migration.Version,
         "target_version powinno wskazywać najwyższą migrację.");
 
     VerifyUnifiedRunApi();
@@ -129,6 +157,32 @@ static void WriteTargetVersion(string root, long version)
     File.WriteAllText(path, $"{{\n  \"target_version\": {version}\n}}\n");
 }
 
+static void WriteConfiguration(
+    string root,
+    MigrationServiceConfiguration service)
+{
+    var targetFile = service.TargetVersionFiles.Single();
+    File.WriteAllText(
+        Path.Combine(root, "migrationtool.json"),
+        $$"""
+{
+  "services": [
+    {
+      "name": "{{service.Name}}",
+      "migrationRoot": "{{service.MigrationRoot}}",
+      "namespace": "{{service.Namespace}}",
+      "targetVersionFiles": [
+        {
+          "path": "{{targetFile.Path}}",
+          "propertyName": "{{targetFile.PropertyName}}"
+        }
+      ]
+    }
+  ]
+}
+""");
+}
+
 static void CommitAll(string root, string message)
 {
     RunGit(root, "add", ".");
@@ -172,4 +226,21 @@ static void Assert(bool condition, string message)
     {
         throw new InvalidOperationException("SMOKE TEST FAILED: " + message);
     }
+}
+
+static async Task AssertThrowsAsync<TException>(
+    Func<Task> action,
+    string message)
+    where TException : Exception
+{
+    try
+    {
+        await action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException("SMOKE TEST FAILED: " + message);
 }
