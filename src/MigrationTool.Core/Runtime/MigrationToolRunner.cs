@@ -46,51 +46,58 @@ public sealed class MigrationToolRunner
         await connection.OpenAsync(runToken).ConfigureAwait(false);
         await AcquireDatabaseLock(connection, options, runToken).ConfigureAwait(false);
 
-        using var serviceProvider = BuildFluentMigratorServices(options);
-        using var scope = serviceProvider.CreateScope();
-        var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
-        var versionLoader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
-        var availableVersions = runner.MigrationLoader
-            .LoadMigrations()
-            .Keys
-            .ToHashSet();
-        var applied = ReadAppliedMigrations(versionLoader);
-        var currentVersion = applied.DefaultIfEmpty(0).Max();
-        var direction = ResolveDirection(currentVersion, options.Version);
-
-        ValidateState(availableVersions, applied, currentVersion, options.Version, direction);
-
-        if (direction == MigrationDirection.None)
+        try
         {
+            using var serviceProvider = BuildFluentMigratorServices(options);
+            using var scope = serviceProvider.CreateScope();
+            var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
+            var versionLoader = scope.ServiceProvider.GetRequiredService<IVersionLoader>();
+            var availableVersions = runner.MigrationLoader
+                .LoadMigrations()
+                .Keys
+                .ToHashSet();
+            var applied = ReadAppliedMigrations(versionLoader);
+            var currentVersion = applied.DefaultIfEmpty(0).Max();
+            var direction = ResolveDirection(currentVersion, options.Version);
+
+            ValidateState(availableVersions, applied, currentVersion, options.Version, direction);
+
+            if (direction == MigrationDirection.None)
+            {
+                return new MigrationRunResult(
+                    MigrationDirection.None,
+                    currentVersion,
+                    options.Version,
+                    options.IsDryRun);
+            }
+
+            runToken.ThrowIfCancellationRequested();
+
+            if (direction == MigrationDirection.Up)
+            {
+                runner.MigrateUp(options.Version);
+            }
+            else
+            {
+                runner.MigrateDown(options.Version);
+            }
+
+            if (!options.IsDryRun)
+            {
+                var appliedAfter = ReadAppliedMigrations(versionLoader);
+                VerifyFinalState(availableVersions, appliedAfter, options.Version);
+            }
+
             return new MigrationRunResult(
-                MigrationDirection.None,
+                direction,
                 currentVersion,
                 options.Version,
                 options.IsDryRun);
         }
-
-        runToken.ThrowIfCancellationRequested();
-
-        if (direction == MigrationDirection.Up)
+        finally
         {
-            runner.MigrateUp(options.Version);
+            await ReleaseDatabaseLock(connection, options).ConfigureAwait(false);
         }
-        else
-        {
-            runner.MigrateDown(options.Version);
-        }
-
-        if (!options.IsDryRun)
-        {
-            var appliedAfter = ReadAppliedMigrations(versionLoader);
-            VerifyFinalState(availableVersions, appliedAfter, options.Version);
-        }
-
-        return new MigrationRunResult(
-            direction,
-            currentVersion,
-            options.Version,
-            options.IsDryRun);
     }
 
     private ServiceProvider BuildFluentMigratorServices(MigrationOptions options)
@@ -223,6 +230,37 @@ public sealed class MigrationToolRunner
         {
             throw new TimeoutException(
                 $"Nie udało się uzyskać blokady migracji. sp_getapplock zwrócił {result}.");
+        }
+    }
+
+    private static async Task ReleaseDatabaseLock(
+        SqlConnection connection,
+        MigrationOptions options)
+    {
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            return;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandTimeout = options.Timeout;
+        command.CommandText = """
+            DECLARE @result int;
+            EXEC @result = sys.sp_releaseapplock
+                @Resource = @resource,
+                @LockOwner = 'Session';
+            SELECT @result;
+            """;
+        command.Parameters.AddWithValue("@resource", BuildLockResource(connection, options));
+
+        var result = Convert.ToInt32(
+            await command.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false),
+            System.Globalization.CultureInfo.InvariantCulture);
+
+        if (result < 0)
+        {
+            throw new InvalidOperationException(
+                $"Nie udało się zwolnić blokady migracji. sp_releaseapplock zwrócił {result}.");
         }
     }
 
