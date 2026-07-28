@@ -115,7 +115,7 @@ public sealed class MigrationToolRunner
             .BuildServiceProvider(validateScopes: true);
     }
 
-    private static MigrationDirection ResolveDirection(long currentVersion, long targetVersion)
+    internal static MigrationDirection ResolveDirection(long currentVersion, long targetVersion)
         => targetVersion.CompareTo(currentVersion) switch
         {
             > 0 => MigrationDirection.Up,
@@ -123,7 +123,7 @@ public sealed class MigrationToolRunner
             _ => MigrationDirection.None
         };
 
-    private static void ValidateState(
+    internal static void ValidateState(
         IReadOnlySet<long> available,
         IReadOnlySet<long> applied,
         long currentVersion,
@@ -167,7 +167,7 @@ public sealed class MigrationToolRunner
         }
     }
 
-    private static void VerifyFinalState(
+    internal static void VerifyFinalState(
         IReadOnlySet<long> available,
         IReadOnlySet<long> applied,
         long targetVersion)

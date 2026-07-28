@@ -1,8 +1,12 @@
 Validation performed after extracting CLI:
 - dotnet restore MigrationToolStarter.sln: passed
 - dotnet build MigrationToolStarter.sln --configuration Release --no-restore: passed
-- dotnet test MigrationToolStarter.sln --configuration Release --no-build --no-restore: passed
-  (the solution uses an executable smoke test rather than a test SDK project)
+- dotnet test tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj
+  --configuration Release --no-restore: passed
+  (29 NUnit tests passed, 0 failed, 0 skipped)
+- dotnet test MigrationToolStarter.sln --configuration Release
+  --no-build --no-restore: passed
+  (29 NUnit tests passed, 0 failed, 0 skipped)
 - dotnet run --project tests/MigrationTool.SmokeTests --configuration Release --no-build: passed
 - dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj --configuration Release: passed
 - local PackageReference restore for examples/Application.Cli: passed

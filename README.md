@@ -205,6 +205,10 @@ nie należy przekazywać ich w argumentach procesu.
 ```bash
 dotnet restore MigrationToolStarter.sln
 dotnet build MigrationToolStarter.sln --configuration Release --no-restore
+dotnet test tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj \
+  --configuration Release \
+  --no-build \
+  --no-restore
 dotnet run --project tests/MigrationTool.SmokeTests --configuration Release --no-build
 dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj \
   --configuration Release \
@@ -214,6 +218,31 @@ dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj \
 
 `dotnet pack` tworzy zwykły pakiet biblioteczny. Nie publikuje go i nie zmienia
 pipeline'u release.
+
+## Testy NUnit
+
+Projekt
+[MigrationTool.Core.Tests](tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj)
+zawiera unit testy biblioteki. Testy sprawdzają:
+
+- wybór `up`, `down` albo braku operacji na podstawie wersji,
+- blokowanie docelowej wersji, której nie ma w assembly,
+- blokowanie migracji obecnych w `VersionInfo`, ale nieobecnych w assembly,
+- wykrywanie pominiętej migracji poniżej aktualnej wersji bazy,
+- poprawny i niepoprawny stan po `up` lub `down`,
+- walidację `MigrationOptions`,
+- walidację zmian względem target brancha,
+- renumerowanie migracji przez `sync`,
+- blokowanie duplikatów i modyfikacji istniejących migracji.
+
+Metody zawierające czystą logikę bezpieczeństwa mają dostęp `internal` i są
+udostępnione wyłącznie assembly testowemu przez `InternalsVisibleTo`. Nie
+powiększa to publicznego API paczki NuGet.
+
+Unit testy celowo nie otwierają połączenia z bazą. Zachowanie
+`SqlConnection`, `sp_getapplock` i rzeczywiste wykonanie instrukcji
+FluentMigratora należy sprawdzać osobnym testem integracyjnym uruchamianym na
+tymczasowej bazie SQL Server.
 
 ## Kompatybilność i migracja
 

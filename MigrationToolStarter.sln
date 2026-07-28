@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationTool.Core", "src/M
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationTool.SmokeTests", "tests/MigrationTool.SmokeTests/MigrationTool.SmokeTests.csproj", "{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MigrationTool.Core.Tests", "tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj", "{901BBE0C-9C34-4A14-A74C-E30ED5E7064A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,5 +22,9 @@ Global
 		{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{529EB1C4-6B55-48FA-B20C-3140FD32E0F4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{901BBE0C-9C34-4A14-A74C-E30ED5E7064A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{901BBE0C-9C34-4A14-A74C-E30ED5E7064A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{901BBE0C-9C34-4A14-A74C-E30ED5E7064A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{901BBE0C-9C34-4A14-A74C-E30ED5E7064A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

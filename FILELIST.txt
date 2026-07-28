@@ -18,6 +18,7 @@ src/MigrationTool.Core/Domain/MigrationDescriptor.cs
 src/MigrationTool.Core/Domain/ValidationModels.cs
 src/MigrationTool.Core/Git/GitClient.cs
 src/MigrationTool.Core/MigrationTool.Core.csproj
+src/MigrationTool.Core/Properties/AssemblyInfo.cs
 src/MigrationTool.Core/Runtime/MigrationToolRunner.cs
 src/MigrationTool.Core/Services/MigrationGenerator.cs
 src/MigrationTool.Core/Services/MigrationSourceScanner.cs
@@ -26,5 +27,12 @@ src/MigrationTool.Core/Services/MigrationToolServiceCollectionExtensions.cs
 src/MigrationTool.Core/Services/MigrationValidator.cs
 src/MigrationTool.Core/Services/MigrationWorkspaceService.cs
 src/MigrationTool.Core/Services/TargetVersionStore.cs
+tests/MigrationTool.Core.Tests/MigrationOptionsTests.cs
+tests/MigrationTool.Core.Tests/MigrationStateTests.cs
+tests/MigrationTool.Core.Tests/MigrationSynchronizerTests.cs
+tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj
+tests/MigrationTool.Core.Tests/MigrationValidatorTests.cs
+tests/MigrationTool.Core.Tests/TestAssertions.cs
+tests/MigrationTool.Core.Tests/Usings.cs
 tests/MigrationTool.SmokeTests/MigrationTool.SmokeTests.csproj
 tests/MigrationTool.SmokeTests/Program.cs
