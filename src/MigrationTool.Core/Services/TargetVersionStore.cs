@@ -5,34 +5,39 @@ namespace MigrationTool.Core.Services;
 
 public sealed class TargetVersionStore
 {
-    public long Read(string repositoryRoot, TargetVersionFileConfiguration configuration)
+    public long Read(
+        string repositoryRoot,
+        MigrationToolConfiguration configuration)
     {
-        var path = Resolve(repositoryRoot, configuration.Path);
+        var path = Resolve(repositoryRoot, configuration.TargetVersionFile);
         var text = File.ReadAllText(path);
-        var matches = BuildPattern(configuration.PropertyName).Matches(text);
+        var matches = BuildPattern(configuration.TargetVersionProperty).Matches(text);
 
         if (matches.Count != 1)
         {
             throw new InvalidOperationException(
-                $"W pliku '{configuration.Path}' oczekiwano dokładnie jednej właściwości " +
-                $"'{configuration.PropertyName}', znaleziono: {matches.Count}.");
+                $"W pliku '{configuration.TargetVersionFile}' oczekiwano dokładnie jednej właściwości " +
+                $"'{configuration.TargetVersionProperty}', znaleziono: {matches.Count}.");
         }
 
         return long.Parse(matches[0].Groups["value"].Value);
     }
 
-    public void Write(string repositoryRoot, TargetVersionFileConfiguration configuration, long version)
+    public void Write(
+        string repositoryRoot,
+        MigrationToolConfiguration configuration,
+        long version)
     {
-        var path = Resolve(repositoryRoot, configuration.Path);
+        var path = Resolve(repositoryRoot, configuration.TargetVersionFile);
         var text = File.ReadAllText(path);
-        var pattern = BuildPattern(configuration.PropertyName);
+        var pattern = BuildPattern(configuration.TargetVersionProperty);
         var matches = pattern.Matches(text);
 
         if (matches.Count != 1)
         {
             throw new InvalidOperationException(
-                $"W pliku '{configuration.Path}' oczekiwano dokładnie jednej właściwości " +
-                $"'{configuration.PropertyName}', znaleziono: {matches.Count}.");
+                $"W pliku '{configuration.TargetVersionFile}' oczekiwano dokładnie jednej właściwości " +
+                $"'{configuration.TargetVersionProperty}', znaleziono: {matches.Count}.");
         }
 
         var updated = pattern.Replace(

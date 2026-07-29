@@ -13,39 +13,30 @@ try
     RunGit(root, "config", "user.email", "migrationtool@example.test");
     RunGit(root, "config", "user.name", "MigrationTool Smoke Test");
 
-    var service = new MigrationServiceConfiguration
+    var configuration = new MigrationToolConfiguration
     {
-        Name = "Orders",
-        MigrationRoot = "src/Orders/Migrations",
-        Namespace = "Orders.Migrations",
-        TargetVersionFiles =
-        [
-            new TargetVersionFileConfiguration
-            {
-                Path = "src/Orders/appsettings.json",
-                PropertyName = "target_version"
-            }
-        ]
+        ProjectRoot = "src/Orders",
+        Namespace = "Orders.Migrations"
     };
 
-    CreateMigration(root, service, 20260101000000000, "Baseline");
+    CreateMigration(root, configuration, 20260101000000000, "Baseline");
     WriteTargetVersion(root, 20260101000000000);
     CommitAll(root, "baseline");
 
     RunGit(root, "branch", "target");
     RunGit(root, "checkout", "-b", "feature");
-    CreateMigration(root, service, 20260102000000000, "FeatureMigration");
+    CreateMigration(root, configuration, 20260102000000000, "FeatureMigration");
     WriteTargetVersion(root, 20260102000000000);
     CommitAll(root, "feature migration");
 
     RunGit(root, "checkout", "target");
-    CreateMigration(root, service, 20260103000000000, "HotfixMigration");
+    CreateMigration(root, configuration, 20260103000000000, "HotfixMigration");
     WriteTargetVersion(root, 20260103000000000);
     CommitAll(root, "hotfix migration");
 
     RunGit(root, "checkout", "feature");
 
-    WriteConfiguration(root, service);
+    WriteConfiguration(root, configuration);
     var api = new MigrationWorkspaceService(root);
     using var registeredServices = new ServiceCollection()
         .AddMigrationToolServices(root)
@@ -55,54 +46,47 @@ try
         "AddMigrationToolServices powinno zarejestrować publiczne API.");
 
     await AssertThrowsAsync<InvalidOperationException>(
-        () => api.CheckAsync(new CheckMigrationsRequest("missing-ref")),
+        () => api.CheckAsync("missing-ref"),
         "CheckAsync powinno zgłosić błąd dla nieistniejącego refa.");
 
     using (var cancelled = new CancellationTokenSource())
     {
         cancelled.Cancel();
         await AssertThrowsAsync<OperationCanceledException>(
-            () => api.ValidateAsync(
-                new ValidateMigrationsRequest(),
-                cancelled.Token),
+            () => api.ValidateAsync(cancelled.Token),
             "Publiczne API powinno respektować CancellationToken.");
     }
 
-    var before = await api.CheckAsync(new CheckMigrationsRequest("target"));
+    var before = await api.CheckAsync("target");
 
     Assert(
-        before.Services
-            .Single()
-            .Validation.Messages
+        before.Validation.Messages
             .Any(x => x.Code == "MIGRATION_OLDER_THAN_TARGET_HEAD"),
         "Walidator powinien wykryć migrację starszą od target head.");
 
-    var dryRun = await api.SynchronizeAsync(
-        new SynchronizeMigrationsRequest("target", IsDryRun: true));
+    var dryRun = await api.SynchronizeAsync("target", isDryRun: true);
     Assert(dryRun.HasChanges, "Dry-run powinien wykryć zmianę numeru.");
 
-    var synchronization = await api.SynchronizeAsync(
-        new SynchronizeMigrationsRequest("target"));
-    var change = synchronization.Services.Single().Changes.Single();
+    var synchronization = await api.SynchronizeAsync("target");
+    var change = synchronization.Changes.Single();
     Assert(
         change.NewVersion > 20260103000000000,
         "Nowa wersja powinna być większa od hotfixu.");
 
-    var after = await api.CheckAsync(new CheckMigrationsRequest("target"));
-    var structure = await api.ValidateAsync(new ValidateMigrationsRequest());
+    var after = await api.CheckAsync("target");
+    var structure = await api.ValidateAsync();
 
     Assert(after.IsValid, "Walidacja względem targetu powinna przejść po sync.");
     Assert(structure.IsValid, "Walidacja strukturalna powinna przejść po sync.");
 
-    var generated = await api.GenerateAsync(
-        new GenerateMigrationRequest("Orders", "GeneratedByPublicApi"));
+    var generated = await api.GenerateAsync("GeneratedByPublicApi");
     Assert(
         generated.Migration.Version > change.NewVersion,
         "Publiczne GenerateAsync powinno utworzyć kolejną migrację.");
 
     var targetStore = new TargetVersionStore();
     Assert(
-        targetStore.Read(root, service.TargetVersionFiles[0]) == generated.Migration.Version,
+        targetStore.Read(root, configuration) == generated.Migration.Version,
         "target_version powinno wskazywać najwyższą migrację.");
 
     VerifyUnifiedRunApi();
@@ -139,15 +123,19 @@ static void VerifyUnifiedRunApi()
 
 static void CreateMigration(
     string repositoryRoot,
-    MigrationServiceConfiguration service,
+    MigrationToolConfiguration configuration,
     long version,
     string name)
 {
-    var folder = Path.Combine(repositoryRoot, service.MigrationRoot, $"{version}_{name}");
+    var folder = Path.Combine(
+        repositoryRoot,
+        configuration.MigrationRoot,
+        $"{version}_{name}");
     Directory.CreateDirectory(folder);
     File.WriteAllText(
         Path.Combine(folder, name + ".cs"),
-        $"using FluentMigrator;\nnamespace {service.Namespace};\n[Migration({version})]\npublic sealed class {name} {{ }}\n");
+        $"using FluentMigrator;\nnamespace {configuration.Namespace};\n" +
+        $"[Migration({version})]\npublic sealed class {name} {{ }}\n");
 }
 
 static void WriteTargetVersion(string root, long version)
@@ -159,26 +147,14 @@ static void WriteTargetVersion(string root, long version)
 
 static void WriteConfiguration(
     string root,
-    MigrationServiceConfiguration service)
+    MigrationToolConfiguration configuration)
 {
-    var targetFile = service.TargetVersionFiles.Single();
     File.WriteAllText(
         Path.Combine(root, "migrationtool.json"),
         $$"""
 {
-  "services": [
-    {
-      "name": "{{service.Name}}",
-      "migrationRoot": "{{service.MigrationRoot}}",
-      "namespace": "{{service.Namespace}}",
-      "targetVersionFiles": [
-        {
-          "path": "{{targetFile.Path}}",
-          "propertyName": "{{targetFile.PropertyName}}"
-        }
-      ]
-    }
-  ]
+  "projectRoot": "{{configuration.ProjectRoot}}",
+  "namespace": "{{configuration.Namespace}}"
 }
 """);
 }

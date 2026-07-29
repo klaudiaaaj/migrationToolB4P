@@ -19,6 +19,7 @@ Repozytorium paczki NuGet
         │ PackageReference
 Repozytorium aplikacji
 ├── src/Application
+├── src/Application.Database.Migrations
 └── src/Application.Cli — parser, Console i kody procesu
         ▲
         │
@@ -26,8 +27,8 @@ GitLab Pipeline
 ```
 
 Projekt `MigrationTool.Core` nie ma `OutputType=Exe`, `PackAsTool` ani
-`ToolCommandName`. Jego `PackageId` pozostaje `MigrationTool.Core`, a domyślna
-wersja pakietu to `1.0.0`.
+`ToolCommandName`. Jego `PackageId` pozostaje `MigrationTool.Core`, a wersja
+uproszczonego API jednego projektu migracyjnego to `2.0.0`.
 
 ## Publiczne API dla operacji repozytoryjnych
 
@@ -42,29 +43,20 @@ var migrations = new MigrationWorkspaceService(
 Dostępne operacje:
 
 ```csharp
-await migrations.GenerateAsync(
-    new GenerateMigrationRequest("Orders", "AddCustomerStatus"),
-    cancellationToken);
+await migrations.GenerateAsync("AddCustomerStatus", cancellationToken);
 
-var validation = await migrations.ValidateAsync(
-    new ValidateMigrationsRequest("Orders"),
-    cancellationToken);
+var validation = await migrations.ValidateAsync(cancellationToken);
 
-var check = await migrations.CheckAsync(
-    new CheckMigrationsRequest("origin/develop", "Orders"),
-    cancellationToken);
+var check = await migrations.CheckAsync("origin/develop", cancellationToken);
 
 var synchronization = await migrations.SynchronizeAsync(
-    new SynchronizeMigrationsRequest(
-        TargetRef: "origin/develop",
-        ServiceName: "Orders",
-        IsDryRun: false),
+    targetRef: "origin/develop",
+    isDryRun: false,
     cancellationToken);
 ```
 
 API:
 
-- przyjmuje jawne requesty,
 - zwraca jawne rezultaty,
 - respektuje `CancellationToken`,
 - nie wypisuje niczego przez `Console`,
@@ -87,21 +79,15 @@ dlatego metody kończą się `Async`, ale nie przenoszą pracy sztucznie do
 
 ```json
 {
-  "services": [
-    {
-      "name": "Orders",
-      "migrationRoot": "src/Orders/Orders.Database.Migrations/Migrations",
-      "namespace": "Orders.Database.Migrations",
-      "targetVersionFiles": [
-        {
-          "path": "src/Orders/Orders.Database.Migrations/appsettings.json",
-          "propertyName": "target_version"
-        }
-      ]
-    }
-  ]
+  "projectRoot": "src/Orders.Database.Migrations",
+  "namespace": "Orders.Database.Migrations"
 }
 ```
+
+Konfiguracja opisuje dokładnie jeden projekt migracyjny. `projectRoot` jest
+ścieżką względną wobec katalogu głównego repozytorium. Biblioteka przyjmuje
+stały układ projektu: migracje w `Migrations/` i wersję w `appsettings.json`.
+Nazwa właściwości wersji jest stała: `target_version`.
 
 Kompletny przykład znajduje się w
 [migrationtool.example.json](migrationtool.example.json).
@@ -231,6 +217,7 @@ zawiera unit testy biblioteki. Testy sprawdzają:
 - wykrywanie pominiętej migracji poniżej aktualnej wersji bazy,
 - poprawny i niepoprawny stan po `up` lub `down`,
 - walidację `MigrationOptions`,
+- odczyt płaskiego `migrationtool.json` dla jednego projektu,
 - walidację zmian względem target brancha,
 - renumerowanie migracji przez `sync`,
 - blokowanie duplikatów i modyfikacji istniejących migracji.

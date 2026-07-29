@@ -14,7 +14,7 @@ public sealed class MigrationValidator
 
     public ValidationResult ValidateStructure(
         string repositoryRoot,
-        MigrationServiceConfiguration service,
+        MigrationToolConfiguration configuration,
         IReadOnlyList<MigrationDescriptor> migrations)
     {
         var result = new ValidationResult();
@@ -23,7 +23,7 @@ public sealed class MigrationValidator
         {
             result.Error(
                 "DUPLICATE_VERSION",
-                $"W mikroserwisie '{service.Name}' wersja {duplicate.Key} występuje więcej niż raz: " +
+                $"Wersja {duplicate.Key} występuje więcej niż raz: " +
                 string.Join(", ", duplicate.Select(x => x.FolderPath)));
         }
 
@@ -59,35 +59,32 @@ public sealed class MigrationValidator
         {
             result.Warning(
                 "NO_MIGRATIONS",
-                $"Nie znaleziono migracji dla mikroserwisu '{service.Name}'.");
+                "Nie znaleziono migracji.");
             return result;
         }
 
         var expectedTarget = migrations.Max(x => x.Version);
-        foreach (var targetFile in service.TargetVersionFiles)
+        try
         {
-            try
+            var actualTarget = _targetVersionStore.Read(repositoryRoot, configuration);
+            if (actualTarget != expectedTarget)
             {
-                var actualTarget = _targetVersionStore.Read(repositoryRoot, targetFile);
-                if (actualTarget != expectedTarget)
-                {
-                    result.Error(
-                        "TARGET_VERSION_MISMATCH",
-                        $"Plik '{targetFile.Path}' ma {targetFile.PropertyName}={actualTarget}, " +
-                        $"ale najwyższa migracja ma wersję {expectedTarget}.");
-                }
+                result.Error(
+                    "TARGET_VERSION_MISMATCH",
+                    $"Plik '{configuration.TargetVersionFile}' ma " +
+                    $"{configuration.TargetVersionProperty}={actualTarget}, " +
+                    $"ale najwyższa migracja ma wersję {expectedTarget}.");
             }
-            catch (Exception exception)
-            {
-                result.Error("TARGET_VERSION_READ_ERROR", exception.Message);
-            }
+        }
+        catch (Exception exception)
+        {
+            result.Error("TARGET_VERSION_READ_ERROR", exception.Message);
         }
 
         return result;
     }
 
     public ValidationResult ValidateAgainstTarget(
-        MigrationServiceConfiguration service,
         IReadOnlyList<MigrationDescriptor> current,
         IReadOnlyList<MigrationDescriptor> target,
         string targetRef)

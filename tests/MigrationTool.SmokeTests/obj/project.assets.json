@@ -820,7 +820,7 @@
           "lib/netcoreapp2.0/_._": {}
         }
       },
-      "MigrationTool.Core/1.0.0": {
+      "MigrationTool.Core/2.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v8.0",
         "dependencies": {
@@ -2160,7 +2160,7 @@
         "system.valuetuple.nuspec"
       ]
     },
-    "MigrationTool.Core/1.0.0": {
+    "MigrationTool.Core/2.0.0": {
       "type": "project",
       "path": "../../src/MigrationTool.Core/MigrationTool.Core.csproj",
       "msbuildProject": "../../src/MigrationTool.Core/MigrationTool.Core.csproj"
@@ -2168,7 +2168,7 @@
   },
   "projectFileDependencyGroups": {
     "net8.0": [
-      "MigrationTool.Core >= 1.0.0"
+      "MigrationTool.Core >= 2.0.0"
     ]
   },
   "packageFolders": {

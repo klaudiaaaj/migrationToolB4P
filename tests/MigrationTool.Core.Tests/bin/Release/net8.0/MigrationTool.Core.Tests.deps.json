@@ -9,7 +9,7 @@
       "MigrationTool.Core.Tests/1.0.0": {
         "dependencies": {
           "Microsoft.NET.Test.Sdk": "18.8.1",
-          "MigrationTool.Core": "1.0.0",
+          "MigrationTool.Core": "2.0.0",
           "NUnit": "4.6.1",
           "NUnit3TestAdapter": "6.2.0"
         },
@@ -1058,14 +1058,14 @@
       "System.Text.Json/4.7.2": {},
       "System.Threading.Tasks.Extensions/4.5.4": {},
       "System.ValueTuple/4.6.1": {},
-      "MigrationTool.Core/1.0.0": {
+      "MigrationTool.Core/2.0.0": {
         "dependencies": {
           "FluentMigrator.Runner.SqlServer": "8.0.1"
         },
         "runtime": {
           "MigrationTool.Core.dll": {
-            "assemblyVersion": "1.0.0",
-            "fileVersion": "1.0.0.0"
+            "assemblyVersion": "2.0.0",
+            "fileVersion": "2.0.0.0"
           }
         }
       }
@@ -1497,7 +1497,7 @@
       "path": "system.valuetuple/4.6.1",
       "hashPath": "system.valuetuple.4.6.1.nupkg.sha512"
     },
-    "MigrationTool.Core/1.0.0": {
+    "MigrationTool.Core/2.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

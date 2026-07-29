@@ -25,7 +25,7 @@ try
     return cli.Command switch
     {
         "new" => await GenerateAsync(migrations, cli, cancellation.Token),
-        "validate" => await ValidateAsync(migrations, cli, cancellation.Token),
+        "validate" => await ValidateAsync(migrations, cancellation.Token),
         "check" => await CheckAsync(migrations, cli, cancellation.Token),
         "sync" => await SynchronizeAsync(migrations, cli, cancellation.Token),
         _ => throw new ArgumentException($"Nieznana komenda '{cli.Command}'.")
@@ -48,9 +48,7 @@ static async Task<int> GenerateAsync(
     CancellationToken cancellationToken)
 {
     var result = await migrations.GenerateAsync(
-        new GenerateMigrationRequest(
-            cli.GetRequired("service"),
-            cli.GetRequired("name")),
+        cli.GetRequired("name"),
         cancellationToken);
 
     Console.WriteLine($"Utworzono {result.Migration.DisplayName}");
@@ -60,12 +58,9 @@ static async Task<int> GenerateAsync(
 
 static async Task<int> ValidateAsync(
     MigrationWorkspaceService migrations,
-    CliArguments cli,
     CancellationToken cancellationToken)
 {
-    var result = await migrations.ValidateAsync(
-        new ValidateMigrationsRequest(cli.Get("service")),
-        cancellationToken);
+    var result = await migrations.ValidateAsync(cancellationToken);
 
     PrintValidation(result);
     return result.IsValid ? 0 : 2;
@@ -77,9 +72,7 @@ static async Task<int> CheckAsync(
     CancellationToken cancellationToken)
 {
     var result = await migrations.CheckAsync(
-        new CheckMigrationsRequest(
-            ResolveTargetRef(cli),
-            cli.Get("service")),
+        ResolveTargetRef(cli),
         cancellationToken);
 
     PrintValidation(result);
@@ -92,21 +85,16 @@ static async Task<int> SynchronizeAsync(
     CancellationToken cancellationToken)
 {
     var result = await migrations.SynchronizeAsync(
-        new SynchronizeMigrationsRequest(
-            ResolveTargetRef(cli),
-            cli.Get("service"),
-            cli.HasFlag("dry-run")),
+        ResolveTargetRef(cli),
+        cli.HasFlag("dry-run"),
         cancellationToken);
 
-    foreach (var service in result.Services)
+    PrintMessages(result.Validation);
+    foreach (var change in result.Changes)
     {
-        PrintMessages(service.ServiceName, service.Validation);
-        foreach (var change in service.Changes)
-        {
-            Console.WriteLine(
-                $"[{service.ServiceName}] {change.Migration.Version} -> {change.NewVersion} " +
-                change.Migration.Name);
-        }
+        Console.WriteLine(
+            $"{change.Migration.Version} -> {change.NewVersion} " +
+            change.Migration.Name);
     }
 
     if (result.IsDryRun && result.HasChanges)
@@ -132,29 +120,26 @@ static string ResolveTargetRef(CliArguments cli)
             "Podaj --target-ref albo ustaw CI_MERGE_REQUEST_TARGET_BRANCH_NAME.");
 }
 
-static void PrintValidation(MigrationsValidationResult result)
+static void PrintValidation(MigrationValidationResult result)
 {
-    foreach (var service in result.Services)
-    {
-        Console.WriteLine(
-            $"[{service.ServiceName}] source={service.CurrentMaximum}" +
-            (service.TargetMaximum is null ? string.Empty : $" target={service.TargetMaximum}"));
-        PrintMessages(service.ServiceName, service.Validation);
-    }
+    Console.WriteLine(
+        $"source={result.CurrentMaximum}" +
+        (result.TargetMaximum is null ? string.Empty : $" target={result.TargetMaximum}"));
+    PrintMessages(result.Validation);
 }
 
-static void PrintMessages(string serviceName, ValidationResult validation)
+static void PrintMessages(ValidationResult validation)
 {
     if (validation.Messages.Count == 0)
     {
-        Console.WriteLine($"[{serviceName}] OK");
+        Console.WriteLine("OK");
         return;
     }
 
     foreach (var message in validation.Messages)
     {
         Console.WriteLine(
-            $"[{serviceName}] {message.Severity.ToString().ToUpperInvariant()} " +
+            $"{message.Severity.ToString().ToUpperInvariant()} " +
             $"{message.Code}: {message.Message}");
     }
 }
@@ -165,10 +150,10 @@ static void PrintHelp()
 Application.Cli
 
 Komendy:
-  new      --service NAME --name MigrationName
-  validate [--service NAME]
-  check    [--service NAME] --target-ref origin/develop
-  sync     [--service NAME] --target-ref origin/develop [--dry-run]
+  new      --name MigrationName
+  validate
+  check    --target-ref origin/develop
+  sync     --target-ref origin/develop [--dry-run]
 
 Opcje wspólne:
   --repo PATH

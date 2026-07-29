@@ -575,7 +575,7 @@
           }
         }
       },
-      "MigrationTool.Core/1.0.0": {
+      "MigrationTool.Core/2.0.0": {
         "type": "package",
         "dependencies": {
           "FluentMigrator.Runner.SqlServer": "8.0.1"
@@ -1641,14 +1641,14 @@
         "microsoft.sqlserver.server.nuspec"
       ]
     },
-    "MigrationTool.Core/1.0.0": {
-      "sha512": "UMOVeXX75ZR3D3u2VPcGlh35O5DEMRZ7C81KYtsdNknDYws/zctNjiobxF+TomDhj3C/meKtDDopiDsvbQVsQA==",
+    "MigrationTool.Core/2.0.0": {
+      "sha512": "EpMyq9bB8WkgD33xusrm4rFh8UPYaRnuAtSqHLUT3Y/KsNzb4xfg41DE1X5SZT5bJfUwHOVTDkcU5+xbWkPLRA==",
       "type": "package",
-      "path": "migrationtool.core/1.0.0",
+      "path": "migrationtool.core/2.0.0",
       "files": [
         ".nupkg.metadata",
         "lib/net8.0/MigrationTool.Core.dll",
-        "migrationtool.core.1.0.0.nupkg.sha512",
+        "migrationtool.core.2.0.0.nupkg.sha512",
         "migrationtool.core.nuspec"
       ]
     },
@@ -2173,7 +2173,7 @@
   },
   "projectFileDependencyGroups": {
     "net8.0": [
-      "MigrationTool.Core >= 1.0.0"
+      "MigrationTool.Core >= 2.0.0"
     ]
   },
   "packageFolders": {
@@ -2221,7 +2221,7 @@
         "dependencies": {
           "MigrationTool.Core": {
             "target": "Package",
-            "version": "[1.0.0, )"
+            "version": "[2.0.0, )"
           }
         },
         "imports": [

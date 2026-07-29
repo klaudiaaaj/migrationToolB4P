@@ -4,54 +4,29 @@ using MigrationTool.Core.Git;
 
 namespace MigrationTool.Core.Services;
 
-public sealed record GenerateMigrationRequest(
-    string ServiceName,
-    string MigrationName);
+public sealed record GenerateMigrationResult(MigrationDescriptor Migration);
 
-public sealed record GenerateMigrationResult(
-    string ServiceName,
-    MigrationDescriptor Migration);
-
-public sealed record ValidateMigrationsRequest(string? ServiceName = null);
-
-public sealed record CheckMigrationsRequest(
-    string TargetRef,
-    string? ServiceName = null);
-
-public sealed record SynchronizeMigrationsRequest(
-    string TargetRef,
-    string? ServiceName = null,
-    bool IsDryRun = false);
-
-public sealed record ServiceValidationResult(
-    string ServiceName,
+public sealed record MigrationValidationResult(
     ValidationResult Validation,
     long CurrentMaximum,
     long? TargetMaximum = null,
-    IReadOnlyList<MigrationDescriptor>? SourceOnlyMigrations = null);
-
-public sealed record MigrationsValidationResult(
-    IReadOnlyList<ServiceValidationResult> Services)
+    IReadOnlyList<MigrationDescriptor>? SourceOnlyMigrations = null)
 {
-    public bool IsValid => Services.All(service => service.Validation.IsValid);
+    public bool IsValid => Validation.IsValid;
 }
 
-public sealed record ServiceSynchronizationResult(
-    string ServiceName,
+public sealed record MigrationSynchronizationResult(
+    bool IsDryRun,
     long TargetMaximum,
     IReadOnlyList<SynchronizationChange> Changes,
-    ValidationResult Validation);
-
-public sealed record MigrationsSynchronizationResult(
-    bool IsDryRun,
-    IReadOnlyList<ServiceSynchronizationResult> Services)
+    ValidationResult Validation)
 {
-    public bool IsValid => Services.All(service => service.Validation.IsValid);
-    public bool HasChanges => Services.Any(service => service.Changes.Count > 0);
+    public bool IsValid => Validation.IsValid;
+    public bool HasChanges => Changes.Count > 0;
 }
 
 /// <summary>
-/// Publiczne API do pracy z plikami migracji w repozytorium.
+/// Publiczne API do pracy z migracjami jednego projektu w repozytorium Git.
 /// Nie parsuje argumentów CLI, nie używa Console i nie zwraca kodów procesu.
 /// </summary>
 public sealed class MigrationWorkspaceService
@@ -88,142 +63,116 @@ public sealed class MigrationWorkspaceService
     }
 
     public Task<GenerateMigrationResult> GenerateAsync(
-        GenerateMigrationRequest request,
+        string migrationName,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(migrationName);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var service = _configuration.GetRequiredService(request.ServiceName);
         var migration = _generator.Create(
             _repositoryRoot,
-            service,
-            request.MigrationName);
+            _configuration,
+            migrationName);
 
-        return Task.FromResult(new GenerateMigrationResult(service.Name, migration));
+        return Task.FromResult(new GenerateMigrationResult(migration));
     }
 
-    public Task<MigrationsValidationResult> ValidateAsync(
-        ValidateMigrationsRequest request,
+    public Task<MigrationValidationResult> ValidateAsync(
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        var results = new List<ServiceValidationResult>();
+        cancellationToken.ThrowIfCancellationRequested();
+        var migrations = _scanner.ScanWorkingTree(_repositoryRoot, _configuration);
+        var validation = _validator.ValidateStructure(
+            _repositoryRoot,
+            _configuration,
+            migrations);
 
-        foreach (var service in _configuration.SelectServices(request.ServiceName))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var migrations = _scanner.ScanWorkingTree(_repositoryRoot, service);
-            var validation = _validator.ValidateStructure(
-                _repositoryRoot,
-                service,
-                migrations);
-
-            results.Add(new ServiceValidationResult(
-                service.Name,
-                validation,
-                migrations.Select(migration => migration.Version).DefaultIfEmpty(0).Max()));
-        }
-
-        return Task.FromResult(new MigrationsValidationResult(results));
+        return Task.FromResult(new MigrationValidationResult(
+            validation,
+            migrations.Select(migration => migration.Version).DefaultIfEmpty(0).Max()));
     }
 
-    public Task<MigrationsValidationResult> CheckAsync(
-        CheckMigrationsRequest request,
+    public Task<MigrationValidationResult> CheckAsync(
+        string targetRef,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        EnsureTargetRefExists(request.TargetRef);
-        var results = new List<ServiceValidationResult>();
+        EnsureTargetRefExists(targetRef);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var service in _configuration.SelectServices(request.ServiceName))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var current = _scanner.ScanWorkingTree(_repositoryRoot, service);
-            var target = _scanner.ScanGitRef(_git, request.TargetRef, service);
-            var validation = _validator.ValidateStructure(
-                _repositoryRoot,
-                service,
-                current);
-            validation.Merge(_validator.ValidateAgainstTarget(
-                service,
-                current,
-                target,
-                request.TargetRef));
+        var current = _scanner.ScanWorkingTree(_repositoryRoot, _configuration);
+        var target = _scanner.ScanGitRef(_git, targetRef, _configuration);
+        var validation = _validator.ValidateStructure(
+            _repositoryRoot,
+            _configuration,
+            current);
+        validation.Merge(_validator.ValidateAgainstTarget(
+            current,
+            target,
+            targetRef));
 
-            var targetVersions = target.Select(migration => migration.Version).ToHashSet();
-            var sourceOnly = current
-                .Where(migration => !targetVersions.Contains(migration.Version))
-                .OrderBy(migration => migration.Version)
-                .ToArray();
+        var targetVersions = target
+            .Select(migration => migration.Version)
+            .ToHashSet();
+        var sourceOnly = current
+            .Where(migration => !targetVersions.Contains(migration.Version))
+            .OrderBy(migration => migration.Version)
+            .ToArray();
 
-            results.Add(new ServiceValidationResult(
-                service.Name,
-                validation,
-                current.Select(migration => migration.Version).DefaultIfEmpty(0).Max(),
-                target.Select(migration => migration.Version).DefaultIfEmpty(0).Max(),
-                sourceOnly));
-        }
-
-        return Task.FromResult(new MigrationsValidationResult(results));
+        return Task.FromResult(new MigrationValidationResult(
+            validation,
+            current.Select(migration => migration.Version).DefaultIfEmpty(0).Max(),
+            target.Select(migration => migration.Version).DefaultIfEmpty(0).Max(),
+            sourceOnly));
     }
 
-    public Task<MigrationsSynchronizationResult> SynchronizeAsync(
-        SynchronizeMigrationsRequest request,
+    public Task<MigrationSynchronizationResult> SynchronizeAsync(
+        string targetRef,
+        bool isDryRun = false,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        EnsureTargetRefExists(request.TargetRef);
-        var results = new List<ServiceSynchronizationResult>();
+        EnsureTargetRefExists(targetRef);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (var service in _configuration.SelectServices(request.ServiceName))
+        var current = _scanner.ScanWorkingTree(_repositoryRoot, _configuration);
+        var validation = _validator.ValidateStructure(
+            _repositoryRoot,
+            _configuration,
+            current);
+
+        if (!validation.IsValid)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var current = _scanner.ScanWorkingTree(_repositoryRoot, service);
-            var validation = _validator.ValidateStructure(
-                _repositoryRoot,
-                service,
-                current);
-
-            if (!validation.IsValid)
-            {
-                results.Add(new ServiceSynchronizationResult(
-                    service.Name,
-                    0,
-                    [],
-                    validation));
-                break;
-            }
-
-            var target = _scanner.ScanGitRef(_git, request.TargetRef, service);
-            var synchronization = _synchronizer.BuildPlan(current, target);
-
-            if (!request.IsDryRun)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                _synchronizer.Apply(_repositoryRoot, service, synchronization);
-                var refreshed = _scanner.ScanWorkingTree(_repositoryRoot, service);
-                validation.Merge(_validator.ValidateStructure(
-                    _repositoryRoot,
-                    service,
-                    refreshed));
-            }
-
-            results.Add(new ServiceSynchronizationResult(
-                service.Name,
-                synchronization.TargetMaximum,
-                synchronization.Changes,
+            return Task.FromResult(new MigrationSynchronizationResult(
+                isDryRun,
+                TargetMaximum: 0,
+                Changes: [],
                 validation));
-
-            if (!validation.IsValid)
-            {
-                break;
-            }
         }
 
-        return Task.FromResult(new MigrationsSynchronizationResult(
-            request.IsDryRun,
-            results));
+        var target = _scanner.ScanGitRef(_git, targetRef, _configuration);
+        var synchronization = _synchronizer.BuildPlan(current, target);
+
+        if (!isDryRun)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _synchronizer.Apply(
+                _repositoryRoot,
+                _configuration,
+                synchronization);
+
+            var refreshed = _scanner.ScanWorkingTree(
+                _repositoryRoot,
+                _configuration);
+            validation.Merge(_validator.ValidateStructure(
+                _repositoryRoot,
+                _configuration,
+                refreshed));
+        }
+
+        return Task.FromResult(new MigrationSynchronizationResult(
+            isDryRun,
+            synchronization.TargetMaximum,
+            synchronization.Changes,
+            validation));
     }
 
     private void EnsureTargetRefExists(string targetRef)
@@ -233,7 +182,8 @@ public sealed class MigrationWorkspaceService
         if (!_git.RefExists(targetRef))
         {
             throw new InvalidOperationException(
-                $"Git ref '{targetRef}' nie istnieje. Pobierz branch docelowy przed wywołaniem API.");
+                $"Git ref '{targetRef}' nie istnieje. " +
+                "Pobierz branch docelowy przed wywołaniem API.");
         }
     }
 }

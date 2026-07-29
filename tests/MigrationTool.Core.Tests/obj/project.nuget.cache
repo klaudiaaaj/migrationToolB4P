@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "7TT+hC6+sxA=",
+  "dgSpecHash": "EGTE2bKF3bQ=",
   "success": true,
   "projectFilePath": "/Users/klaudiajanecka/Downloads/migrationtool-starter/tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj",
   "expectedPackageFiles": [
@@ -63,8 +63,7 @@
     "/Users/klaudiajanecka/.nuget/packages/system.text.encodings.web/4.7.2/system.text.encodings.web.4.7.2.nupkg.sha512",
     "/Users/klaudiajanecka/.nuget/packages/system.text.json/4.7.2/system.text.json.4.7.2.nupkg.sha512",
     "/Users/klaudiajanecka/.nuget/packages/system.threading.tasks.extensions/4.5.4/system.threading.tasks.extensions.4.5.4.nupkg.sha512",
-    "/Users/klaudiajanecka/.nuget/packages/system.valuetuple/4.6.1/system.valuetuple.4.6.1.nupkg.sha512",
-    "/Users/klaudiajanecka/.nuget/packages/migrationtool.core/1.0.0/migrationtool.core.1.0.0.nupkg.sha512"
+    "/Users/klaudiajanecka/.nuget/packages/system.valuetuple/4.6.1/system.valuetuple.4.6.1.nupkg.sha512"
   ],
   "logs": []
 }

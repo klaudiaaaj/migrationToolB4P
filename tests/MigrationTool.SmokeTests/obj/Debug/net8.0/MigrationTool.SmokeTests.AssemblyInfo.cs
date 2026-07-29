@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MigrationTool.SmokeTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c29e4ef6bc9d10ab8b14cf8a149b997bb6bb01b6")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f19c5dca69e769ab9da5981989633e412388ea1b")]
 [assembly: System.Reflection.AssemblyProductAttribute("MigrationTool.SmokeTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MigrationTool.SmokeTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

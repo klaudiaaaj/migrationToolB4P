@@ -2,7 +2,7 @@
   <Target
     Name="ValidateMigrationFiles"
     BeforeTargets="BeforeBuild"
-    Condition="'$(MigrationValidationEnabled)' == 'true' and '$(MigrationServiceName)' != '' and '$(DesignTimeBuild)' != 'true'">
+    Condition="'$(MigrationValidationEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
 
     <PropertyGroup>
       <MigrationRepositoryRoot Condition="'$(MigrationRepositoryRoot)' == ''">$(MSBuildProjectDirectory)/../../..</MigrationRepositoryRoot>
@@ -12,6 +12,6 @@
 
     <Exec
       WorkingDirectory="$(MigrationRepositoryRoot)"
-      Command="dotnet run --project &quot;$(MigrationCliProject)&quot; -- validate --repo &quot;$(MigrationRepositoryRoot)&quot; --config &quot;$(MigrationToolConfig)&quot; --service &quot;$(MigrationServiceName)&quot;" />
+      Command="dotnet run --project &quot;$(MigrationCliProject)&quot; -- validate --repo &quot;$(MigrationRepositoryRoot)&quot; --config &quot;$(MigrationToolConfig)&quot;" />
   </Target>
 </Project>

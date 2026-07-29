@@ -5,6 +5,7 @@ Ten katalog jest wzorcem do skopiowania do repozytorium aplikacji:
 ```text
 Application.sln
 ├── src/Application
+├── src/Application.Database.Migrations
 ├── src/Application.Cli
 └── tests
 ```
@@ -31,25 +32,16 @@ repozytorium aplikacji. Jeżeli uruchamiasz je z innego katalogu, podaj
 ```bash
 dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
   new \
-  --service Orders \
   --name AddCustomerStatus
 ```
 
-Tworzy folder i klasę migracji oraz aktualizuje `target_version` dla serwisu
-`Orders`.
+Tworzy folder i klasę migracji oraz aktualizuje `target_version`.
 
 ### Walidacja lokalna
 
 ```bash
 dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
-  validate \
-  --service Orders
-```
-
-Pomijając `--service`, walidujesz wszystkie serwisy z `migrationtool.json`:
-
-```bash
-dotnet run --project src/Application.Cli/Application.Cli.csproj -- validate
+  validate
 ```
 
 ### Sprawdzenie względem brancha docelowego
@@ -65,7 +57,6 @@ Następnie uruchom:
 ```bash
 dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
   check \
-  --service Orders \
   --target-ref origin/develop
 ```
 
@@ -80,7 +71,6 @@ Najpierw sprawdź wynik bez zapisu plików:
 ```bash
 dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
   sync \
-  --service Orders \
   --target-ref origin/develop \
   --dry-run
 ```
@@ -90,7 +80,6 @@ Jeżeli wynik jest poprawny, wykonaj synchronizację:
 ```bash
 dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
   sync \
-  --service Orders \
   --target-ref origin/develop
 ```
 
@@ -103,7 +92,6 @@ branchu. Po synchronizacji sprawdź diff, zacommituj zmiany i ponownie uruchom
 ```text
 --repo PATH                 katalog repozytorium Git
 --config migrationtool.json ścieżka do konfiguracji migracji
---service NAME              nazwa serwisu z konfiguracji
 ```
 
 Przykład z jawną lokalizacją repozytorium i konfiguracji:
@@ -117,3 +105,20 @@ dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
 
 Parser, `Console` i mapowanie kodów wyjścia należą wyłącznie do tego projektu.
 Biblioteka `MigrationTool.Core` nie zna argumentów tekstowych ani procesu CLI.
+
+## Konfiguracja jednego projektu migracyjnego
+
+`migrationtool.json` znajduje się w repozytorium aplikacji i opisuje dokładnie
+jeden projekt migracyjny:
+
+```json
+{
+  "projectRoot": "src/Application.Database.Migrations",
+  "namespace": "Application.Database.Migrations"
+}
+```
+
+`projectRoot` jest względny wobec katalogu głównego repozytorium. CLI zawsze
+szuka migracji w `<projectRoot>/Migrations` i wersji w
+`<projectRoot>/appsettings.json`.
+Nazwa właściwości wersji jest stała: `target_version`.

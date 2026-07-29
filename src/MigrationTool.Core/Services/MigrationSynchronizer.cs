@@ -96,7 +96,7 @@ public sealed class MigrationSynchronizer
 
     public void Apply(
         string repositoryRoot,
-        MigrationServiceConfiguration service,
+        MigrationToolConfiguration configuration,
         SynchronizationPlan plan)
     {
         if (plan.Changes.Count == 0)
@@ -105,9 +105,9 @@ public sealed class MigrationSynchronizer
         }
 
         var staged = new List<StagedDirectory>();
-        var targetFileBackups = service.TargetVersionFiles
-            .Select(x => Path.GetFullPath(Path.Combine(repositoryRoot, x.Path)))
-            .ToDictionary(x => x, File.ReadAllBytes, StringComparer.Ordinal);
+        var targetVersionPath = Path.GetFullPath(
+            Path.Combine(repositoryRoot, configuration.TargetVersionFile));
+        var targetVersionBackup = File.ReadAllBytes(targetVersionPath);
 
         try
         {
@@ -151,23 +151,17 @@ public sealed class MigrationSynchronizer
                 item.FinalPath = destination;
             }
 
-            var refreshed = _scanner.ScanWorkingTree(repositoryRoot, service);
+            var refreshed = _scanner.ScanWorkingTree(repositoryRoot, configuration);
             var targetVersion = Math.Max(
                 plan.TargetMaximum,
                 refreshed.Select(x => x.Version).DefaultIfEmpty(0).Max());
 
-            foreach (var targetFile in service.TargetVersionFiles)
-            {
-                _targetVersionStore.Write(repositoryRoot, targetFile, targetVersion);
-            }
+            _targetVersionStore.Write(repositoryRoot, configuration, targetVersion);
         }
         catch
         {
             TryRestore(staged);
-            foreach (var backup in targetFileBackups)
-            {
-                File.WriteAllBytes(backup.Key, backup.Value);
-            }
+            File.WriteAllBytes(targetVersionPath, targetVersionBackup);
 
             throw;
         }

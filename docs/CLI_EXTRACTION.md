@@ -24,7 +24,7 @@ Podział odpowiedzialności:
 | CLI | parser, `Program.cs`, formatowanie komunikatów, kody procesu |
 | Logika biznesowa | generator, validator, synchronizer, runtime runner |
 | Infrastruktura | Git, system plików, JSON, FluentMigrator, SQL Server |
-| API wielokrotnego użycia | requesty, rezultaty i `MigrationWorkspaceService` |
+| API wielokrotnego użycia | rezultaty i `MigrationWorkspaceService` |
 
 Przepływy przed refaktoryzacją:
 
@@ -49,7 +49,6 @@ MigrationWorkspaceService.SynchronizeAsync(...)
 
 Każda metoda:
 
-- przyjmuje jawny request,
 - przyjmuje `CancellationToken`,
 - zwraca jawny rezultat,
 - nie korzysta z `Console`,
@@ -95,7 +94,7 @@ Do repozytorium aplikacji należy skopiować
 `Program.cs` realizuje przepływ:
 
 ```text
-argumenty → CliArguments → request paczki → MigrationWorkspaceService
+argumenty → CliArguments → MigrationWorkspaceService
 → rezultat → Console i kod procesu
 ```
 
@@ -120,11 +119,9 @@ public sealed class MigrationCheckService
         _migrations = migrations;
     }
 
-    public Task<MigrationsValidationResult> ExecuteAsync(
+    public Task<MigrationValidationResult> ExecuteAsync(
         CancellationToken cancellationToken)
-        => _migrations.ValidateAsync(
-            new ValidateMigrationsRequest("Orders"),
-            cancellationToken);
+        => _migrations.ValidateAsync(cancellationToken);
 }
 ```
 
@@ -168,6 +165,10 @@ ponieważ należy do `Application.Cli`. Minimalne przypadki:
 - usunięty projekt i namespace `MigrationTool.Cli`,
 - usunięte wrappery z katalogu `scripts`,
 - usunięty package-repo job wskazujący stare CLI,
+- konfiguracja opisuje jeden projekt migracyjny zamiast tablicy serwisów,
+- komendy CLI nie przyjmują już `--service`,
+- metody `MigrationWorkspaceService` przyjmują proste argumenty zamiast
+  obiektów request,
 - konsumenci muszą dodać własny projekt wykonywalny.
 
 Runtime `MigrationToolRunner`, konfiguracja i serwisy biznesowe pozostały

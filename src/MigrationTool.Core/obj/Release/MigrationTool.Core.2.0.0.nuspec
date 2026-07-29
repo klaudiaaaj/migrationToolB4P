@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>MigrationTool.Core</id>
+    <version>2.0.0</version>
+    <authors>MigrationTool.Core</authors>
+    <description>Package Description</description>
+    <repository type="git" commit="f19c5dca69e769ab9da5981989633e412388ea1b" />
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="FluentMigrator.Runner.SqlServer" version="8.0.1" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/bin/Release/net8.0/MigrationTool.Core.dll" target="lib/net8.0/MigrationTool.Core.dll" />
+  </files>
+</package>

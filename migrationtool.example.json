@@ -1,37 +1,4 @@
 {
-  "services": [
-    {
-      "name": "Orders",
-      "migrationRoot": "src/Orders/Orders.Database.Migrations/Migrations",
-      "namespace": "Orders.Database.Migrations",
-      "targetVersionFiles": [
-        {
-          "path": "src/Orders/Orders.Database.Migrations/appsettings.json",
-          "propertyName": "target_version"
-        }
-      ]
-    },
-    {
-      "name": "Billing",
-      "migrationRoot": "src/Billing/Billing.Database.Migrations/Migrations",
-      "namespace": "Billing.Database.Migrations",
-      "targetVersionFiles": [
-        {
-          "path": "src/Billing/Billing.Database.Migrations/appsettings.json",
-          "propertyName": "target_version"
-        }
-      ]
-    },
-    {
-      "name": "Identity",
-      "migrationRoot": "src/Identity/Identity.Database.Migrations/Migrations",
-      "namespace": "Identity.Database.Migrations",
-      "targetVersionFiles": [
-        {
-          "path": "src/Identity/Identity.Database.Migrations/appsettings.json",
-          "propertyName": "target_version"
-        }
-      ]
-    }
-  ]
+  "projectRoot": "src/Orders.Database.Migrations",
+  "namespace": "Orders.Database.Migrations"
 }

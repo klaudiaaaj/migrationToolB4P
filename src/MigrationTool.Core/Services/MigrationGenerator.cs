@@ -24,7 +24,7 @@ public sealed class MigrationGenerator
 
     public MigrationDescriptor Create(
         string repositoryRoot,
-        MigrationServiceConfiguration service,
+        MigrationToolConfiguration configuration,
         string migrationName)
     {
         if (!ClassNamePattern.IsMatch(migrationName))
@@ -33,13 +33,14 @@ public sealed class MigrationGenerator
                 "Nazwa migracji musi być poprawną nazwą klasy C# bez spacji, np. AddCustomerStatus.");
         }
 
-        var existing = _scanner.ScanWorkingTree(repositoryRoot, service);
+        var existing = _scanner.ScanWorkingTree(repositoryRoot, configuration);
         var currentTimestamp = long.Parse(
             DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture),
             CultureInfo.InvariantCulture);
         var version = Math.Max(currentTimestamp, existing.Select(x => x.Version).DefaultIfEmpty(0).Max() + 1);
 
-        var migrationRoot = Path.GetFullPath(Path.Combine(repositoryRoot, service.MigrationRoot));
+        var migrationRoot = Path.GetFullPath(
+            Path.Combine(repositoryRoot, configuration.MigrationRoot));
         var folderName = $"{version}_{migrationName}";
         var folder = Path.Combine(migrationRoot, folderName);
 
@@ -48,22 +49,20 @@ public sealed class MigrationGenerator
             throw new IOException($"Folder '{folder}' już istnieje.");
         }
 
-        var targetFileBackups = service.TargetVersionFiles
-            .Select(x => Path.GetFullPath(Path.Combine(repositoryRoot, x.Path)))
-            .ToDictionary(x => x, File.ReadAllBytes, StringComparer.Ordinal);
+        var targetVersionPath = Path.GetFullPath(
+            Path.Combine(repositoryRoot, configuration.TargetVersionFile));
+        var targetVersionBackup = File.ReadAllBytes(targetVersionPath);
 
         try
         {
             Directory.CreateDirectory(folder);
             var filePath = Path.Combine(folder, migrationName + ".cs");
-            File.WriteAllText(filePath, BuildTemplate(service.Namespace, migrationName, version));
+            File.WriteAllText(
+                filePath,
+                BuildTemplate(configuration.Namespace, migrationName, version));
+            _targetVersionStore.Write(repositoryRoot, configuration, version);
 
-            foreach (var targetFile in service.TargetVersionFiles)
-            {
-                _targetVersionStore.Write(repositoryRoot, targetFile, version);
-            }
-
-            return _scanner.ScanWorkingTree(repositoryRoot, service)
+            return _scanner.ScanWorkingTree(repositoryRoot, configuration)
                 .Single(x => x.Version == version);
         }
         catch
@@ -73,10 +72,7 @@ public sealed class MigrationGenerator
                 Directory.Delete(folder, recursive: true);
             }
 
-            foreach (var backup in targetFileBackups)
-            {
-                File.WriteAllBytes(backup.Key, backup.Value);
-            }
+            File.WriteAllBytes(targetVersionPath, targetVersionBackup);
 
             throw;
         }

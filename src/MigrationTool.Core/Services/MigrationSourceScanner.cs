@@ -19,13 +19,14 @@ public sealed class MigrationSourceScanner
 
     public IReadOnlyList<MigrationDescriptor> ScanWorkingTree(
         string repositoryRoot,
-        MigrationServiceConfiguration service)
+        MigrationToolConfiguration configuration)
     {
-        var absoluteRoot = Path.GetFullPath(Path.Combine(repositoryRoot, service.MigrationRoot));
+        var absoluteRoot = Path.GetFullPath(
+            Path.Combine(repositoryRoot, configuration.MigrationRoot));
         if (!Directory.Exists(absoluteRoot))
         {
             throw new DirectoryNotFoundException(
-                $"Nie znaleziono katalogu migracji '{absoluteRoot}' dla '{service.Name}'.");
+                $"Nie znaleziono katalogu migracji '{absoluteRoot}'.");
         }
 
         var descriptors = new List<MigrationDescriptor>();
@@ -53,9 +54,9 @@ public sealed class MigrationSourceScanner
     public IReadOnlyList<MigrationDescriptor> ScanGitRef(
         GitClient git,
         string gitRef,
-        MigrationServiceConfiguration service)
+        MigrationToolConfiguration configuration)
     {
-        var migrationRoot = NormalizePath(service.MigrationRoot).TrimEnd('/');
+        var migrationRoot = NormalizePath(configuration.MigrationRoot).TrimEnd('/');
         var files = git.ListFiles(gitRef, migrationRoot)
             .Where(x => x.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             .ToArray();

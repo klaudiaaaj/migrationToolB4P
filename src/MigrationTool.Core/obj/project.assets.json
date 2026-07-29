@@ -2157,7 +2157,7 @@
     "/Users/klaudiajanecka/.nuget/packages/": {}
   },
   "project": {
-    "version": "1.0.0",
+    "version": "2.0.0",
     "restore": {
       "projectUniqueName": "/Users/klaudiajanecka/Downloads/migrationtool-starter/src/MigrationTool.Core/MigrationTool.Core.csproj",
       "projectName": "MigrationTool.Core",

@@ -24,7 +24,6 @@ public sealed class MigrationValidatorTests
         };
 
         var result = _validator.ValidateAgainstTarget(
-            Service(),
             current,
             target,
             "origin/develop");
@@ -42,7 +41,6 @@ public sealed class MigrationValidatorTests
         var target = new[] { Migration(100, "Baseline", "original") };
 
         var result = _validator.ValidateAgainstTarget(
-            Service(),
             current,
             target,
             "origin/develop");
@@ -64,7 +62,6 @@ public sealed class MigrationValidatorTests
         var target = new[] { Migration(100, "Baseline", "same") };
 
         var result = _validator.ValidateAgainstTarget(
-            Service(),
             current,
             target,
             "origin/develop");
@@ -75,33 +72,50 @@ public sealed class MigrationValidatorTests
     [Test]
     public void ValidateStructure_ReportsDuplicateAndAttributeMismatch()
     {
+        var repositoryRoot = Path.Combine(
+            Path.GetTempPath(),
+            "migration-validator-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(repositoryRoot);
+        File.WriteAllText(
+            Path.Combine(repositoryRoot, "appsettings.json"),
+            """
+            {
+              "target_version": 100
+            }
+            """);
+
         var migrations = new[]
         {
             Migration(100, "First", "first"),
             Migration(100, "Second", "second", attributeVersion: 200)
         };
 
-        var result = _validator.ValidateStructure(
-            repositoryRoot: ".",
-            Service(),
-            migrations);
+        try
+        {
+            var result = _validator.ValidateStructure(
+                repositoryRoot,
+                Configuration(),
+                migrations);
 
-        Assert.That(result.IsValid, Is.False);
-        Assert.That(
-            result.Messages.Select(message => message.Code),
-            Does.Contain("DUPLICATE_VERSION"));
-        Assert.That(
-            result.Messages.Select(message => message.Code),
-            Does.Contain("FOLDER_ATTRIBUTE_MISMATCH"));
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(
+                result.Messages.Select(message => message.Code),
+                Does.Contain("DUPLICATE_VERSION"));
+            Assert.That(
+                result.Messages.Select(message => message.Code),
+                Does.Contain("FOLDER_ATTRIBUTE_MISMATCH"));
+        }
+        finally
+        {
+            Directory.Delete(repositoryRoot, recursive: true);
+        }
     }
 
-    private static MigrationServiceConfiguration Service()
+    private static MigrationToolConfiguration Configuration()
         => new()
         {
-            Name = "Orders",
-            MigrationRoot = "Migrations",
+            ProjectRoot = ".",
             Namespace = "Orders.Migrations",
-            TargetVersionFiles = []
         };
 
     private static MigrationDescriptor Migration(

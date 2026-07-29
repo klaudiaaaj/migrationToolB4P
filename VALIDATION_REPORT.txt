@@ -3,10 +3,10 @@ Validation performed after extracting CLI:
 - dotnet build MigrationToolStarter.sln --configuration Release --no-restore: passed
 - dotnet test tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj
   --configuration Release --no-restore: passed
-  (29 NUnit tests passed, 0 failed, 0 skipped)
+  (33 NUnit tests passed, 0 failed, 0 skipped)
 - dotnet test MigrationToolStarter.sln --configuration Release
   --no-build --no-restore: passed
-  (29 NUnit tests passed, 0 failed, 0 skipped)
+  (33 NUnit tests passed, 0 failed, 0 skipped)
 - dotnet run --project tests/MigrationTool.SmokeTests --configuration Release --no-build: passed
 - dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj --configuration Release: passed
 - local PackageReference restore for examples/Application.Cli: passed
@@ -21,6 +21,6 @@ Environment:
 - FluentMigrator.Runner.SqlServer 8.0.1
 
 Package:
-- artifacts/packages/MigrationTool.Core.1.0.0.nupkg
+- artifacts/packages/MigrationTool.Core.2.0.0.nupkg
 - NuGet emitted one advisory that the package does not contain a package README.
   Package metadata was intentionally not changed as part of CLI extraction.

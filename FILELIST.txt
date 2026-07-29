@@ -28,6 +28,7 @@ src/MigrationTool.Core/Services/MigrationValidator.cs
 src/MigrationTool.Core/Services/MigrationWorkspaceService.cs
 src/MigrationTool.Core/Services/TargetVersionStore.cs
 tests/MigrationTool.Core.Tests/MigrationOptionsTests.cs
+tests/MigrationTool.Core.Tests/MigrationToolConfigurationTests.cs
 tests/MigrationTool.Core.Tests/MigrationStateTests.cs
 tests/MigrationTool.Core.Tests/MigrationSynchronizerTests.cs
 tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj

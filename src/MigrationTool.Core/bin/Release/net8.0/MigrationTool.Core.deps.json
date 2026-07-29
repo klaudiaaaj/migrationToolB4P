@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v8.0": {
-      "MigrationTool.Core/1.0.0": {
+      "MigrationTool.Core/2.0.0": {
         "dependencies": {
           "FluentMigrator.Runner.SqlServer": "8.0.1"
         },
@@ -535,7 +535,7 @@
     }
   },
   "libraries": {
-    "MigrationTool.Core/1.0.0": {
+    "MigrationTool.Core/2.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
