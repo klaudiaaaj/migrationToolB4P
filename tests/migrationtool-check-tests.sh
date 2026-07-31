@@ -29,7 +29,7 @@ printf '%s\n' \
     >"$fixture/src/Test.Migrations/Migrations/100_Baseline/Baseline.cs"
 printf 'Opis migracji.\n' \
     >"$fixture/src/Test.Migrations/Migrations/100_Baseline/README.md"
-printf '{ "TargetVersion": 100 }\n' \
+printf '{ "TargetVersion": "100" }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 printf '{ "projectRoot": "src/Test.Migrations", "namespace": "Test.Migrations" }\n' \
     >"$fixture/migrationtool.json"
@@ -54,7 +54,7 @@ printf '%s\n' \
     '    }' \
     '}' \
     >"$fixture/src/Test.Migrations/Migrations/300_Hotfix/Hotfix.cs"
-printf '{ "TargetVersion": 300 }\n' \
+printf '{ "TargetVersion": "300" }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 git -C "$fixture" add .
 git -C "$fixture" commit -qm "hotfix"
@@ -91,7 +91,7 @@ printf '%s\n' \
     '    }' \
     '}' \
     >"$fixture/src/Test.Migrations/Migrations/400_Feature/Feature.cs"
-printf '{ "TargetVersion": 400 }\n' \
+printf '{ "TargetVersion": "400" }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 
 sh "$check_script" check \
@@ -105,7 +105,7 @@ mv \
 sed -i.bak 's/Migration(400)/Migration(200)/' \
     "$fixture/src/Test.Migrations/Migrations/200_Feature/Feature.cs"
 rm "$fixture/src/Test.Migrations/Migrations/200_Feature/Feature.cs.bak"
-printf '{ "TargetVersion": 200 }\n' \
+printf '{ "TargetVersion": "200" }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 
 if sh "$check_script" check \
@@ -132,7 +132,7 @@ printf '%s\n' \
     '    }' \
     '}' \
     >"$fixture/src/Test.Migrations/Migrations/100_Baseline/Baseline.cs"
-printf '{ "TargetVersion": 100 }\n' \
+printf '{ "TargetVersion": "100" }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 
 if ! sh "$check_script" check \

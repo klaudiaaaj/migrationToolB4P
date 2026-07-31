@@ -69,8 +69,8 @@ read_json_integer()
     property=$1
     file=$2
 
-    sed -n \
-        "s/.*\"$property\"[[:space:]]*:[[:space:]]*\\([0-9][0-9]*\\).*/\\1/p" \
+    sed -nE \
+        "s/.*\"$property\"[[:space:]]*:[[:space:]]*\"?([0-9]+)\"?.*/\\1/p" \
         "$file" |
         head -n 1
 }
@@ -222,7 +222,7 @@ validate_working_tree_structure()
     configured_target=$(read_json_integer "TargetVersion" "$target_version_file")
     if [ -z "$configured_target" ]; then
         error "TARGET_VERSION_READ_ERROR" \
-            "Nie znaleziono liczbowej właściwości TargetVersion w '$target_version_file_relative'."
+            "Nie znaleziono liczbowej wartości TargetVersion w '$target_version_file_relative'."
     elif [ "$configured_target" != "$current_maximum" ]; then
         error "TARGET_VERSION_MISMATCH" \
             "Plik '$target_version_file_relative' ma TargetVersion=$configured_target, ale najwyższa migracja ma wersję $current_maximum."
