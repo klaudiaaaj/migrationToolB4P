@@ -147,7 +147,7 @@ Smoke test używa bezpośrednio publicznego API i sprawdza:
 - zastosowanie synchronizacji,
 - walidację po synchronizacji,
 - generowanie migracji,
-- aktualizację `target_version`,
+- aktualizację `TargetVersion`,
 - nieistniejący Git ref,
 - anulowanie przez `CancellationToken`.
 

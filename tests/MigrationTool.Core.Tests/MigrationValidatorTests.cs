@@ -80,7 +80,7 @@ public sealed class MigrationValidatorTests
             Path.Combine(repositoryRoot, "appsettings.json"),
             """
             {
-              "target_version": 100
+              "TargetVersion": 100
             }
             """);
 

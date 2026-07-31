@@ -219,14 +219,138 @@ validate_working_tree_structure()
         return
     }
 
-    configured_target=$(read_json_integer "target_version" "$target_version_file")
+    configured_target=$(read_json_integer "TargetVersion" "$target_version_file")
     if [ -z "$configured_target" ]; then
         error "TARGET_VERSION_READ_ERROR" \
-            "Nie znaleziono liczbowej właściwości target_version w '$target_version_file_relative'."
+            "Nie znaleziono liczbowej właściwości TargetVersion w '$target_version_file_relative'."
     elif [ "$configured_target" != "$current_maximum" ]; then
         error "TARGET_VERSION_MISMATCH" \
-            "Plik '$target_version_file_relative' ma target_version=$configured_target, ale najwyższa migracja ma wersję $current_maximum."
+            "Plik '$target_version_file_relative' ma TargetVersion=$configured_target, ale najwyższa migracja ma wersję $current_maximum."
     fi
+}
+
+extract_method()
+{
+    method_name=$1
+    source_file=$2
+
+    awk -v method="$method_name" '
+        BEGIN {
+            signature = "public override void " method "("
+            found = 0
+            body_started = 0
+        }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+
+            if (!found) {
+                compact = line
+                gsub(/[[:space:]]/, "", compact)
+                expected = "publicoverridevoid" method "("
+                if (index(compact, expected) == 0) {
+                    next
+                }
+
+                match(line, /^[[:space:]]*/)
+                indentation = substr(line, 1, RLENGTH)
+                found = 1
+            }
+
+            print line
+
+            if (index(line, "{") > 0) {
+                body_started = 1
+            }
+
+            if (body_started && line == indentation "}") {
+                exit 0
+            }
+        }
+        END {
+            if (!found) {
+                exit 1
+            }
+        }
+    ' "$source_file"
+}
+
+write_working_method()
+{
+    folder=$1
+    method_name=$2
+    output=$3
+    : >"$output"
+    found_count=0
+
+    files="$temporary_directory/working-method-files"
+    find "$repository_root/$folder" -type f -name '*.cs' -print | sort >"$files"
+
+    while IFS= read -r source_file; do
+        extracted="$temporary_directory/working-method"
+        if extract_method "$method_name" "$source_file" >"$extracted"; then
+            found_count=$((found_count + 1))
+            sed -n '1,$p' "$extracted" >>"$output"
+        fi
+    done <"$files"
+
+    [ "$found_count" -eq 1 ]
+}
+
+write_target_method()
+{
+    folder=$1
+    method_name=$2
+    output=$3
+    : >"$output"
+    found_count=0
+
+    files="$temporary_directory/target-method-files"
+    git -C "$repository_root" ls-tree -r --name-only "$target_ref" -- "$folder" |
+        awk 'tolower($0) ~ /\.cs$/ { print }' |
+        sort >"$files"
+
+    while IFS= read -r git_path; do
+        source_file="$temporary_directory/target-method-source"
+        git -C "$repository_root" show "$target_ref:$git_path" >"$source_file" ||
+            return 1
+
+        extracted="$temporary_directory/target-method"
+        if extract_method "$method_name" "$source_file" >"$extracted"; then
+            found_count=$((found_count + 1))
+            sed -n '1,$p' "$extracted" >>"$output"
+        fi
+    done <"$files"
+
+    [ "$found_count" -eq 1 ]
+}
+
+migration_methods_are_equal()
+{
+    current_folder=$1
+    target_folder=$2
+
+    for method_name in Up Down; do
+        current_method="$temporary_directory/current-$method_name"
+        target_method="$temporary_directory/target-$method_name"
+
+        if ! write_working_method "$current_folder" "$method_name" "$current_method"; then
+            method_difference="$method_name: w kodzie oczekiwano dokładnie jednej metody"
+            return 1
+        fi
+        if ! write_target_method "$target_folder" "$method_name" "$target_method"; then
+            method_difference="$method_name: na target branchu oczekiwano dokładnie jednej metody"
+            return 1
+        fi
+
+        if ! git diff --no-index --ignore-space-at-eol --quiet \
+            "$current_method" "$target_method"; then
+            method_difference="$method_name"
+            return 1
+        fi
+    done
+
+    return 0
 }
 
 validate_against_target()
@@ -240,11 +364,15 @@ validate_against_target()
         target_line=$(awk -F '|' -v requested="$version" '$1 == requested { print; exit }' "$target_records")
 
         if [ -n "$target_line" ]; then
+            target_folder=$(printf '%s\n' "$target_line" | cut -d '|' -f2)
             target_name=$(printf '%s\n' "$target_line" | cut -d '|' -f3)
 
             if [ "$current_name" != "$target_name" ]; then
                 error "VERSION_COLLISION" \
                     "Wersja $version ma inną nazwę w kodzie i w '$target_ref'. Source: '${version}_$current_name', target: '${version}_$target_name'. Zrób rebase albo uruchom sync."
+            elif ! migration_methods_are_equal "$current_folder" "$target_folder"; then
+                error "MIGRATION_UP_OR_DOWN_MODIFIED" \
+                    "Migracja '${version}_$current_name' zmieniła metodę $method_difference względem '$target_ref'. Istniejących metod Up/Down nie wolno modyfikować."
             fi
             continue
         fi

@@ -38,7 +38,7 @@ public sealed class MigrationToolConfigurationTests
                         "appsettings.json")));
                 Assert.That(
                     configuration.TargetVersionProperty,
-                    Is.EqualTo("target_version"));
+                    Is.EqualTo("TargetVersion"));
             });
     }
 

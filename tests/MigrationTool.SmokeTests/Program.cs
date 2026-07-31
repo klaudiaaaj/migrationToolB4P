@@ -87,7 +87,7 @@ try
     var targetStore = new TargetVersionStore();
     Assert(
         targetStore.Read(root, configuration) == generated.Migration.Version,
-        "target_version powinno wskazywać najwyższą migrację.");
+        "TargetVersion powinno wskazywać najwyższą migrację.");
 
     VerifyUnifiedRunApi();
 
@@ -142,7 +142,7 @@ static void WriteTargetVersion(string root, long version)
 {
     var path = Path.Combine(root, "src/Orders/appsettings.json");
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-    File.WriteAllText(path, $"{{\n  \"target_version\": {version}\n}}\n");
+    File.WriteAllText(path, $"{{\n  \"TargetVersion\": {version}\n}}\n");
 }
 
 static void WriteConfiguration(

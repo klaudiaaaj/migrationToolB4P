@@ -9,7 +9,7 @@ public sealed class MigrationToolConfiguration
 
     public string MigrationRoot => BuildProjectPath("Migrations");
     public string TargetVersionFile => BuildProjectPath("appsettings.json");
-    public string TargetVersionProperty => "target_version";
+    public string TargetVersionProperty => "TargetVersion";
 
     public static MigrationToolConfiguration Load(string path)
     {

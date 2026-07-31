@@ -61,7 +61,7 @@ public sealed class TargetVersionStore
         var path = Path.GetFullPath(Path.Combine(repositoryRoot, relativePath));
         if (!File.Exists(path))
         {
-            throw new FileNotFoundException("Nie znaleziono pliku target_version.", path);
+            throw new FileNotFoundException("Nie znaleziono pliku z TargetVersion.", path);
         }
 
         return path;

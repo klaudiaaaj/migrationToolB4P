@@ -35,7 +35,7 @@ dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
   --name AddCustomerStatus
 ```
 
-Tworzy folder i klasę migracji oraz aktualizuje `target_version`.
+Tworzy folder i klasę migracji oraz aktualizuje `TargetVersion`.
 
 ### Walidacja lokalna
 
@@ -121,7 +121,7 @@ jeden projekt migracyjny:
 `projectRoot` jest względny wobec katalogu głównego repozytorium. CLI zawsze
 szuka migracji w `<projectRoot>/Migrations` i wersji w
 `<projectRoot>/appsettings.json`.
-Nazwa właściwości wersji jest stała: `target_version`.
+Nazwa właściwości wersji jest stała: `TargetVersion`.
 
 ## Merged Results Pipeline
 
@@ -148,9 +148,11 @@ commicie będącym wynikiem połączenia source i target brancha. Job wykonuje:
 scripts/migrationtool.sh check
 ```
 
-Skrypt nie używa .NET. Sprawdza foldery, atrybuty, `target_version`, porównuje
+Skrypt nie używa .NET. Sprawdza foldery, atrybuty, `TargetVersion`, porównuje
 wynik merge z dokładnym SHA target brancha i blokuje MR, jeżeli migracja
-wymaga synchronizacji. W obrazie wystarczą `git` oraz podstawowe narzędzia
+wymaga synchronizacji. Dla migracji istniejących na target branchu porównuje
+wyłącznie metody `public override void Up()` i `public override void Down()`;
+zmiany poza tymi metodami są ignorowane. W obrazie wystarczą `git` oraz podstawowe narzędzia
 POSIX (`sh`, `find`, `sed`, `awk`, `sort`).
 
 `sync` pozostaje komendą aplikacji .NET uruchamianą lokalnie. Nie wykonujemy
