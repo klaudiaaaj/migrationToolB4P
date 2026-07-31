@@ -159,32 +159,15 @@ dotnet run \
 Pełny przykład jest w
 [examples/Application.Cli/gitlab-ci.yml](examples/Application.Cli/gitlab-ci.yml).
 
-Wariant bez osobnego joba build:
+W ustawieniach GitLaba należy włączyć `Enable merged results pipelines`.
+Job MR uruchamia `scripts/migrationtool.sh check`. Skrypt nie wymaga .NET:
+korzysta z Gita oraz podstawowych narzędzi POSIX. Wykonuje walidację struktury,
+sprawdza `target_version`, porównuje migracje z target branchem i zwraca kod
+różny od zera, gdy MR nie jest bezpieczny.
 
-```yaml
-script:
-  - dotnet restore src/Application.Cli/Application.Cli.csproj
-  - >
-    dotnet run
-    --project src/Application.Cli/Application.Cli.csproj
-    --configuration Release
-    --no-restore
-    --
-    check
-    --repo "$CI_PROJECT_DIR"
-    --target-ref "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
-```
-
-Wariant z wcześniejszym buildem uruchamia bezpośrednio:
-
-```bash
-dotnet src/Application.Cli/bin/Release/net8.0/Application.Cli.dll check ...
-```
-
-Kod różny od zera zwrócony przez `Application.Cli` automatycznie kończy job
-błędem. Sekrety należy przechowywać jako chronione i maskowane zmienne GitLab
-CI/CD oraz odczytywać w `Program.cs` przez `Environment.GetEnvironmentVariable`;
-nie należy przekazywać ich w argumentach procesu.
+`sync` nadal jest uruchamiany lokalnie przez aplikację CLI, ponieważ to komenda
+modyfikująca pliki developera. Kod różny od zera zwrócony przez skrypt
+automatycznie kończy job błędem.
 
 ## Budowanie i pakowanie
 
@@ -196,6 +179,7 @@ dotnet test tests/MigrationTool.Core.Tests/MigrationTool.Core.Tests.csproj \
   --no-build \
   --no-restore
 dotnet run --project tests/MigrationTool.SmokeTests --configuration Release --no-build
+sh tests/migrationtool-check-tests.sh
 dotnet pack src/MigrationTool.Core/MigrationTool.Core.csproj \
   --configuration Release \
   --no-build \

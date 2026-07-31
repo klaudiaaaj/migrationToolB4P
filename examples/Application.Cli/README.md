@@ -55,7 +55,7 @@ git fetch origin develop
 Następnie uruchom:
 
 ```bash
-dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
+sh scripts/migrationtool.sh \
   check \
   --target-ref origin/develop
 ```
@@ -122,3 +122,91 @@ jeden projekt migracyjny:
 szuka migracji w `<projectRoot>/Migrations` i wersji w
 `<projectRoot>/appsettings.json`.
 Nazwa właściwości wersji jest stała: `target_version`.
+
+## Merged Results Pipeline
+
+Najpierw w GitLabie włącz:
+
+```text
+Settings
+└── Merge requests
+    └── Merge options
+        └── Enable merged results pipelines
+```
+
+Opcji nie da się włączyć samym YAML-em. W `.gitlab-ci.yml` job musi mieć regułę:
+
+```yaml
+rules:
+  - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+```
+
+Gotowy job znajduje się w `gitlab-ci.yml`. GitLab uruchamia go na tymczasowym
+commicie będącym wynikiem połączenia source i target brancha. Job wykonuje:
+
+```text
+scripts/migrationtool.sh check
+```
+
+Skrypt nie używa .NET. Sprawdza foldery, atrybuty, `target_version`, porównuje
+wynik merge z dokładnym SHA target brancha i blokuje MR, jeżeli migracja
+wymaga synchronizacji. W obrazie wystarczą `git` oraz podstawowe narzędzia
+POSIX (`sh`, `find`, `sed`, `awk`, `sort`, `cmp`).
+
+`sync` pozostaje komendą aplikacji .NET uruchamianą lokalnie. Nie wykonujemy
+go automatycznie w pipeline, ponieważ zmiany zniknęłyby razem z katalogiem
+roboczym joba. Po czerwonym `check` developer wykonuje lokalnie:
+
+```bash
+git fetch origin develop
+
+dotnet run --project src/Application.Cli/Application.Cli.csproj -- \
+  sync \
+  --target-ref origin/develop
+
+sh scripts/migrationtool.sh \
+  check \
+  --target-ref origin/develop
+
+git add .
+git commit -m "Synchronize migration version"
+git push
+```
+
+Push uruchomi nowy Merged Results Pipeline już z poprawioną migracją.
+
+### Czas wykonania pipeline
+
+Pipeline nie wykonuje już `dotnet restore`, `dotnet build` ani `dotnet run`.
+Wykonuje tylko:
+
+```bash
+sh scripts/migrationtool.sh \
+  check \
+  --repo "$CI_PROJECT_DIR" \
+  --config migrationtool.json \
+  --target-ref origin/develop
+```
+
+Target branch jest pobierany z `--depth=1`. Jeżeli najdłużej trwa instalowanie
+Gita, użyj firmowego obrazu, który już go zawiera.
+
+## Git w obrazie GitLab CI
+
+Skrypt `check` i komenda `sync` uruchamiają proces `git`, dlatego Git musi być
+dostępny wewnątrz obrazu joba. Sam checkout wykonywany przez GitLab Runnera nie
+gwarantuje, że polecenie `git` będzie dostępne później w skrypcie joba.
+
+Minimalny przykład:
+
+```yaml
+image: alpine:3.20
+
+before_script:
+  - apk add --no-cache git
+  - git --version
+  - git fetch origin "+${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+```
+
+Jeżeli runner nie ma dostępu do repozytoriów systemowych albo uruchamia joby
+bez uprawnień do instalowania pakietów, przygotuj firmowy obraz z Gitem.
