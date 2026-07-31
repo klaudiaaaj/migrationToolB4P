@@ -13,7 +13,7 @@ Komendy:
 Jeżeli --target-ref nie został podany, skrypt użyje:
   origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
 
-Komenda check wymaga wyłącznie: sh, git, find, sed, awk, sort oraz cmp.
+Komenda check wymaga wyłącznie: sh, git, find, sed, awk oraz sort.
 Nie wymaga środowiska .NET.
 EOF
 }
@@ -233,34 +233,31 @@ folders_have_equal_cs_files()
 {
     current_folder=$1
     target_folder=$2
-    current_list="$temporary_directory/current-relative-files"
-    target_list="$temporary_directory/target-relative-files"
 
-    find "$repository_root/$current_folder" -type f -name '*.cs' -print |
+    current_list=$(find "$repository_root/$current_folder" -type f -name '*.cs' -print |
         sed "s|^$repository_root/$current_folder/||" |
-        sort >"$current_list"
+        sort)
 
-    git -C "$repository_root" ls-tree -r --name-only "$target_ref" -- "$target_folder" |
+    target_list=$(git -C "$repository_root" ls-tree -r --name-only "$target_ref" -- "$target_folder" |
         sed "s|^$target_folder/||" |
-        sort >"$target_list"
+        sort)
 
-    cmp -s "$current_list" "$target_list" || return 1
+    [ "$current_list" = "$target_list" ] || return 1
 
+    printf '%s\n' "$current_list" |
     while IFS= read -r relative_file; do
         [ -n "$relative_file" ] || continue
-        target_content="$temporary_directory/target-content"
-        current_content="$temporary_directory/current-content"
 
-        git -C "$repository_root" show \
-            "$target_ref:$target_folder/$relative_file" |
-            sed 's/\r$//' >"$target_content" || return 1
-        sed 's/\r$//' \
-            "$repository_root/$current_folder/$relative_file" >"$current_content"
+        current_hash=$(git -C "$repository_root" hash-object \
+            --path="$current_folder/$relative_file" \
+            "$repository_root/$current_folder/$relative_file") || exit 1
+        target_hash=$(git -C "$repository_root" rev-parse \
+            "$target_ref:$target_folder/$relative_file") || exit 1
 
-        cmp -s "$current_content" "$target_content" || return 1
-    done <"$current_list"
+        [ "$current_hash" = "$target_hash" ] || exit 1
+    done
 
-    return 0
+    [ "$?" -eq 0 ]
 }
 
 validate_against_target()
@@ -341,7 +338,7 @@ case "$command_name" in
     *) fail "Nieznana komenda '$command_name'." ;;
 esac
 
-for required_command in git find sed awk sort cmp mktemp; do
+for required_command in git find sed awk sort mktemp; do
     require_command "$required_command"
 done
 

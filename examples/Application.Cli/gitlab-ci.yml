@@ -13,7 +13,7 @@ variables:
 validate-migrations:
   stage: validate
   # Możesz tutaj pozostawić własny obraz. Musi zawierać git i podstawowe
-  # narzędzia POSIX: sh, find, sed, awk, sort oraz cmp.
+  # narzędzia POSIX: sh, find, sed, awk oraz sort.
   image: alpine:3.20
   interruptible: true
   rules:

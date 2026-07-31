@@ -151,7 +151,7 @@ scripts/migrationtool.sh check
 Skrypt nie używa .NET. Sprawdza foldery, atrybuty, `target_version`, porównuje
 wynik merge z dokładnym SHA target brancha i blokuje MR, jeżeli migracja
 wymaga synchronizacji. W obrazie wystarczą `git` oraz podstawowe narzędzia
-POSIX (`sh`, `find`, `sed`, `awk`, `sort`, `cmp`).
+POSIX (`sh`, `find`, `sed`, `awk`, `sort`).
 
 `sync` pozostaje komendą aplikacji .NET uruchamianą lokalnie. Nie wykonujemy
 go automatycznie w pipeline, ponieważ zmiany zniknęłyby razem z katalogiem
