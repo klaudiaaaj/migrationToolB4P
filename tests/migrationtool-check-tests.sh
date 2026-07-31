@@ -82,11 +82,11 @@ printf '%s\n' \
 printf '{ "target_version": 100 }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 
-if sh "$check_script" check \
+if ! sh "$check_script" check \
     --repo "$fixture" \
     --config migrationtool.json \
     --target-ref target >/dev/null 2>&1; then
-    echo "Expected a modified historical migration to fail." >&2
+    echo "Expected a source-code-only change to be ignored." >&2
     exit 1
 fi
 
