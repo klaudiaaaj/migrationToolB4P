@@ -16,6 +16,8 @@ printf '%s\n' \
     '[Migration(100)]' \
     'public sealed class Baseline { }' \
     >"$fixture/src/Test.Migrations/Migrations/100_Baseline/Baseline.cs"
+printf 'Opis migracji.\n' \
+    >"$fixture/src/Test.Migrations/Migrations/100_Baseline/README.md"
 printf '{ "target_version": 100 }\n' \
     >"$fixture/src/Test.Migrations/appsettings.json"
 printf '{ "projectRoot": "src/Test.Migrations", "namespace": "Test.Migrations" }\n' \
@@ -37,6 +39,11 @@ git -C "$fixture" add .
 git -C "$fixture" commit -qm "hotfix"
 
 git -C "$fixture" switch -q --detach HEAD~1
+git -C "$fixture" config core.autocrlf true
+printf '%s\r\n' \
+    '[Migration(100)]' \
+    'public sealed class Baseline { }' \
+    >"$fixture/src/Test.Migrations/Migrations/100_Baseline/Baseline.cs"
 mkdir -p "$fixture/src/Test.Migrations/Migrations/400_Feature"
 printf '%s\n' \
     '[Migration(400)]' \

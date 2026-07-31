@@ -239,25 +239,25 @@ folders_have_equal_cs_files()
         sort)
 
     target_list=$(git -C "$repository_root" ls-tree -r --name-only "$target_ref" -- "$target_folder" |
+        awk 'tolower($0) ~ /\.cs$/ { print }' |
         sed "s|^$target_folder/||" |
         sort)
 
     [ "$current_list" = "$target_list" ] || return 1
 
+    # Git wykonuje porównanie po zastosowaniu własnych reguł dotyczących
+    # końców linii i .gitattributes. Surowe hashe plików dawały fałszywe
+    # różnice pomiędzy CRLF w working tree i LF zapisanym w repozytorium.
     printf '%s\n' "$current_list" |
-    while IFS= read -r relative_file; do
-        [ -n "$relative_file" ] || continue
-
-        current_hash=$(git -C "$repository_root" hash-object \
-            --path="$current_folder/$relative_file" \
-            "$repository_root/$current_folder/$relative_file") || exit 1
-        target_hash=$(git -C "$repository_root" rev-parse \
-            "$target_ref:$target_folder/$relative_file") || exit 1
-
-        [ "$current_hash" = "$target_hash" ] || exit 1
-    done
-
-    [ "$?" -eq 0 ]
+        while IFS= read -r relative_file; do
+            [ -n "$relative_file" ] || continue
+            git -C "$repository_root" diff \
+                --no-ext-diff \
+                --quiet \
+                "$target_ref" \
+                -- "$current_folder/$relative_file" ||
+                exit 1
+        done
 }
 
 validate_against_target()
