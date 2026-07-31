@@ -233,31 +233,50 @@ folders_have_equal_cs_files()
 {
     current_folder=$1
     target_folder=$2
+    current_list_file="$temporary_directory/current-relative-files"
+    target_list_file="$temporary_directory/target-relative-files"
 
-    current_list=$(find "$repository_root/$current_folder" -type f -name '*.cs' -print |
+    find "$repository_root/$current_folder" -type f -name '*.cs' -print |
         sed "s|^$repository_root/$current_folder/||" |
-        sort)
+        sort >"$current_list_file"
 
-    target_list=$(git -C "$repository_root" ls-tree -r --name-only "$target_ref" -- "$target_folder" |
+    git -C "$repository_root" ls-tree -r --name-only "$target_ref" -- "$target_folder" |
         awk 'tolower($0) ~ /\.cs$/ { print }' |
         sed "s|^$target_folder/||" |
-        sort)
+        sort >"$target_list_file"
 
-    [ "$current_list" = "$target_list" ] || return 1
+    current_list=$(sed -n '1,$p' "$current_list_file")
+    target_list=$(sed -n '1,$p' "$target_list_file")
+    if [ "$current_list" != "$target_list" ]; then
+        printf 'DETAIL: Lista plików .cs jest różna.\n' >&2
+        printf '  source (%s):\n%s\n' "$current_folder" "$current_list" >&2
+        printf '  target (%s):\n%s\n' "$target_folder" "$target_list" >&2
+        return 1
+    fi
 
-    # Git wykonuje porównanie po zastosowaniu własnych reguł dotyczących
-    # końców linii i .gitattributes. Surowe hashe plików dawały fałszywe
-    # różnice pomiędzy CRLF w working tree i LF zapisanym w repozytorium.
-    printf '%s\n' "$current_list" |
-        while IFS= read -r relative_file; do
-            [ -n "$relative_file" ] || continue
-            git -C "$repository_root" diff \
-                --no-ext-diff \
-                --quiet \
-                "$target_ref" \
-                -- "$current_folder/$relative_file" ||
-                exit 1
-        done
+    # MigrationSourceScanner w C# normalizuje CRLF do LF przed wyliczeniem
+    # hasha. Robimy tutaj dokładnie to samo, aby różne ustawienia autocrlf
+    # na branchach nie powodowały fałszywego konfliktu.
+    while IFS= read -r relative_file; do
+        [ -n "$relative_file" ] || continue
+
+        current_hash=$(sed 's/\r$//' \
+            "$repository_root/$current_folder/$relative_file" |
+            git hash-object --stdin)
+        target_hash=$(git -C "$repository_root" show \
+            "$target_ref:$target_folder/$relative_file" |
+            sed 's/\r$//' |
+            git hash-object --stdin)
+
+        if [ "$current_hash" != "$target_hash" ]; then
+            printf 'DETAIL: Różni się plik .cs: %s\n' "$relative_file" >&2
+            printf '  source hash: %s\n' "$current_hash" >&2
+            printf '  target hash: %s\n' "$target_hash" >&2
+            return 1
+        fi
+    done <"$current_list_file"
+
+    return 0
 }
 
 validate_against_target()
