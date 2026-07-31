@@ -162,9 +162,9 @@ Pełny przykład jest w
 W ustawieniach GitLaba należy włączyć `Enable merged results pipelines`.
 Job MR uruchamia `scripts/migrationtool.sh check`. Skrypt nie wymaga .NET:
 korzysta z Gita oraz podstawowych narzędzi POSIX. Wykonuje walidację struktury,
-sprawdza `TargetVersion`, porównuje migracje z target branchem i zwraca kod
-różny od zera, gdy MR nie jest bezpieczny. W istniejących migracjach
-porównuje wyłącznie implementacje metod `Up()` i `Down()`.
+sprawdza `TargetVersion`, porównuje numery i nazwy migracji z target branchem
+i zwraca kod różny od zera, gdy MR nie jest bezpieczny. Zawartość metod
+`Up()` i `Down()` nie jest porównywana.
 
 `sync` nadal jest uruchamiany lokalnie przez aplikację CLI, ponieważ to komenda
 modyfikująca pliki developera. Kod różny od zera zwrócony przez skrypt

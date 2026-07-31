@@ -139,19 +139,7 @@ if ! sh "$check_script" check \
     --repo "$fixture" \
     --config migrationtool.json \
     --target-ref target >/dev/null 2>&1; then
-    echo "Expected a source-code-only change to be ignored." >&2
-    exit 1
-fi
-
-sed -i.bak 's/Create.Table("Baseline")/Create.Table("ChangedBaseline")/' \
-    "$fixture/src/Test.Migrations/Migrations/100_Baseline/Baseline.cs"
-rm "$fixture/src/Test.Migrations/Migrations/100_Baseline/Baseline.cs.bak"
-
-if sh "$check_script" check \
-    --repo "$fixture" \
-    --config migrationtool.json \
-    --target-ref target >/dev/null 2>&1; then
-    echo "Expected a modified Up method to fail." >&2
+    echo "Expected a source-code change to be ignored." >&2
     exit 1
 fi
 
