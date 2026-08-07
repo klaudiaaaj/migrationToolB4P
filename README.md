@@ -1,5 +1,10 @@
 # MigrationTool.Core
 
+Dokumentacja procesowa:
+
+- [Scenariusze testów manualnych](docs/JIRA_MIGRATION_VALIDATION_TESTS.md),
+- [Coding Standards — migracje bazodanowe](docs/CODING_STANDARDS_DATABASE_MIGRATIONS.md).
+
 Biblioteka NuGet dla .NET 8 zawierająca:
 
 - publiczne API do generowania, walidowania, porównywania i synchronizowania
